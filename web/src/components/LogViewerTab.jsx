@@ -15,6 +15,8 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [renderAnsiTopPane, setRenderAnsiTopPane] = useState(true);
+  const [renderAnsiBottomPane, setRenderAnsiBottomPane] = useState(true);
 
   const { sendMessage, lastMessage, connectionStatus } = useWebSocket(
     `ws://${window.location.host}/ws`
@@ -23,6 +25,30 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   useEffect(() => {
     setConnected(connectionStatus === 'connected');
   }, [connectionStatus]);
+
+  useEffect(() => {
+    // Load settings on mount
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        setRenderAnsiTopPane(data.renderAnsiTopPane);
+        setRenderAnsiBottomPane(data.renderAnsiBottomPane);
+      }
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  };
+
+  const handleSettingsClose = () => {
+    setSettingsOpen(false);
+    // Reload settings after modal closes
+    loadSettings();
+  };
 
   useEffect(() => {
     if (lastMessage) {
@@ -143,6 +169,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
               lines={lines}
               autoScroll={autoScroll}
               title="All Lines"
+              renderAnsi={renderAnsiTopPane}
             />
           ) : (
             <DropZone isDragging={isDragging} onFileSelect={handleFileDrop} />
@@ -167,6 +194,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
               lines={filteredLines}
               autoScroll={autoScroll}
               title={hasFilters ? "Filtered Lines" : "All Lines"}
+              renderAnsi={renderAnsiBottomPane}
             />
           ) : (
             <div style={{ height: '100%', backgroundColor: '#1e1e1e' }} />
@@ -175,7 +203,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
       />
       <SettingsModal 
         isOpen={settingsOpen} 
-        onClose={() => setSettingsOpen(false)} 
+        onClose={handleSettingsClose} 
       />
     </div>
   );

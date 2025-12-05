@@ -9,8 +9,10 @@ import (
 
 // Settings represents application settings
 type Settings struct {
-	TailLines int `json:"tailLines"` // Number of lines to load initially
-	mu        sync.RWMutex
+	TailLines            int  `json:"tailLines"`            // Number of lines to load initially
+	RenderAnsiTopPane    bool `json:"renderAnsiTopPane"`    // Render ANSI codes in top pane (default: true - prettified)
+	RenderAnsiBottomPane bool `json:"renderAnsiBottomPane"` // Render ANSI codes in bottom pane (default: true - prettified)
+	mu                   sync.RWMutex
 }
 
 var (
@@ -22,7 +24,9 @@ var (
 func GetInstance() *Settings {
 	once.Do(func() {
 		instance = &Settings{
-			TailLines: 1000, // Default
+			TailLines:            1000, // Default
+			RenderAnsiTopPane:    true, // Prettified by default
+			RenderAnsiBottomPane: true, // Prettified by default
 		}
 		instance.Load()
 	})
@@ -79,6 +83,34 @@ func (s *Settings) GetTailLines() int {
 func (s *Settings) SetTailLines(lines int) {
 	s.mu.Lock()
 	s.TailLines = lines
+	s.mu.Unlock()
+}
+
+// GetRenderAnsiTopPane returns the render ANSI setting for top pane
+func (s *Settings) GetRenderAnsiTopPane() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.RenderAnsiTopPane
+}
+
+// SetRenderAnsiTopPane sets the render ANSI setting for top pane
+func (s *Settings) SetRenderAnsiTopPane(render bool) {
+	s.mu.Lock()
+	s.RenderAnsiTopPane = render
+	s.mu.Unlock()
+}
+
+// GetRenderAnsiBottomPane returns the render ANSI setting for bottom pane
+func (s *Settings) GetRenderAnsiBottomPane() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.RenderAnsiBottomPane
+}
+
+// SetRenderAnsiBottomPane sets the render ANSI setting for bottom pane
+func (s *Settings) SetRenderAnsiBottomPane(render bool) {
+	s.mu.Lock()
+	s.RenderAnsiBottomPane = render
 	s.mu.Unlock()
 }
 

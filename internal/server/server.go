@@ -79,10 +79,14 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		// Return current settings
 		type SettingsResponse struct {
-			TailLines int `json:"tailLines"`
+			TailLines            int  `json:"tailLines"`
+			RenderAnsiTopPane    bool `json:"renderAnsiTopPane"`
+			RenderAnsiBottomPane bool `json:"renderAnsiBottomPane"`
 		}
 		response := SettingsResponse{
-			TailLines: appSettings.GetTailLines(),
+			TailLines:            appSettings.GetTailLines(),
+			RenderAnsiTopPane:    appSettings.GetRenderAnsiTopPane(),
+			RenderAnsiBottomPane: appSettings.GetRenderAnsiBottomPane(),
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -91,7 +95,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		// Update settings
 		var update struct {
-			TailLines int `json:"tailLines"`
+			TailLines            int   `json:"tailLines"`
+			RenderAnsiTopPane    *bool `json:"renderAnsiTopPane"`
+			RenderAnsiBottomPane *bool `json:"renderAnsiBottomPane"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -100,10 +106,17 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 
 		if update.TailLines > 0 {
 			appSettings.SetTailLines(update.TailLines)
-			if err := appSettings.Save(); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+		}
+		if update.RenderAnsiTopPane != nil {
+			appSettings.SetRenderAnsiTopPane(*update.RenderAnsiTopPane)
+		}
+		if update.RenderAnsiBottomPane != nil {
+			appSettings.SetRenderAnsiBottomPane(*update.RenderAnsiBottomPane)
+		}
+
+		if err := appSettings.Save(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		w.Write([]byte(`{"status":"ok"}`))

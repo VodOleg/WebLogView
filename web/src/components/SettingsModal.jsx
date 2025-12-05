@@ -3,6 +3,8 @@ import { useState, useEffect } from 'preact/hooks';
 
 export function SettingsModal({ isOpen, onClose }) {
   const [tailLines, setTailLines] = useState(1000);
+  const [renderAnsiTopPane, setRenderAnsiTopPane] = useState(false);
+  const [renderAnsiBottomPane, setRenderAnsiBottomPane] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -18,6 +20,8 @@ export function SettingsModal({ isOpen, onClose }) {
       if (!response.ok) throw new Error('Failed to load settings');
       const data = await response.json();
       setTailLines(data.tailLines);
+      setRenderAnsiTopPane(data.renderAnsiTopPane);
+      setRenderAnsiBottomPane(data.renderAnsiBottomPane);
     } catch (err) {
       console.error('Failed to load settings:', err);
       setError(err.message);
@@ -31,7 +35,11 @@ export function SettingsModal({ isOpen, onClose }) {
       const response = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tailLines: parseInt(tailLines) })
+        body: JSON.stringify({ 
+          tailLines: parseInt(tailLines),
+          renderAnsiTopPane,
+          renderAnsiBottomPane
+        })
       });
       if (!response.ok) throw new Error('Failed to save settings');
       onClose();
@@ -72,6 +80,42 @@ export function SettingsModal({ isOpen, onClose }) {
             <div style={styles.helpText}>
               Number of lines to load initially when opening a log file. 
               Higher values may impact performance.
+            </div>
+          </div>
+
+          <div style={styles.section}>
+            <h3 style={styles.sectionTitle}>ANSI Color Rendering</h3>
+            <div style={styles.helpText}>
+              Terminal color codes can be displayed as colors or shown as raw text.
+            </div>
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={renderAnsiTopPane}
+                onChange={(e) => setRenderAnsiTopPane(e.target.checked)}
+              />
+              Render colors in Top Pane (All Lines)
+            </label>
+            <div style={styles.helpText}>
+              When enabled, ANSI escape codes will be rendered as colors. 
+              When disabled, codes will appear as raw text.
+            </div>
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={renderAnsiBottomPane}
+                onChange={(e) => setRenderAnsiBottomPane(e.target.checked)}
+              />
+              Render colors in Bottom Pane (Filtered Lines)
+            </label>
+            <div style={styles.helpText}>
+              When enabled, ANSI escape codes will be rendered as colors in the filtered view.
             </div>
           </div>
         </div>
@@ -154,12 +198,32 @@ const styles = {
   field: {
     marginBottom: '20px'
   },
+  section: {
+    marginTop: '24px',
+    marginBottom: '12px'
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: '15px',
+    fontWeight: 600,
+    color: '#e0e0e0',
+    marginBottom: '8px'
+  },
   label: {
     display: 'block',
     color: '#e0e0e0',
     fontSize: '14px',
     fontWeight: 500,
     marginBottom: '8px'
+  },
+  checkboxLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: '#e0e0e0',
+    fontSize: '14px',
+    fontWeight: 500,
+    cursor: 'pointer'
   },
   input: {
     width: '100%',

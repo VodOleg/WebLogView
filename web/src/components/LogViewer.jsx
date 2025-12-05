@@ -1,7 +1,25 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FixedSizeList as List } from 'react-window';
+import AnsiToHtml from 'ansi-to-html';
 
-export function LogViewer({ lines, autoScroll, title }) {
+const ansiConverter = new AnsiToHtml({
+  fg: '#d4d4d4',
+  bg: '#1e1e1e',
+  newline: false,
+  escapeXML: true,
+  colors: {
+    0: '#000000',  // black
+    1: '#cd3131',  // red
+    2: '#0dbc79',  // green
+    3: '#e5e510',  // yellow
+    4: '#2472c8',  // blue
+    5: '#bc3fbc',  // magenta
+    6: '#11a8cd',  // cyan
+    7: '#e5e5e5',  // white
+  }
+});
+
+export function LogViewer({ lines, autoScroll, title, renderAnsi = false }) {
   const listRef = useRef(null);
   const containerRef = useRef(null);
   const [height, setHeight] = useState(400);
@@ -33,12 +51,24 @@ export function LogViewer({ lines, autoScroll, title }) {
     };
   }, [title]);
 
-  const Row = ({ index, style }) => (
-    <div style={{ ...style, ...rowStyle }}>
-      <span style={lineNumberStyle}>{index + 1}</span>
-      <span style={lineContentStyle}>{lines[index]}</span>
-    </div>
-  );
+  const Row = ({ index, style }) => {
+    const lineContent = lines[index];
+    const displayContent = renderAnsi ? ansiConverter.toHtml(lineContent) : lineContent;
+    
+    return (
+      <div style={{ ...style, ...rowStyle }}>
+        <span style={lineNumberStyle}>{index + 1}</span>
+        {renderAnsi ? (
+          <span 
+            style={lineContentStyle} 
+            dangerouslySetInnerHTML={{ __html: displayContent }}
+          />
+        ) : (
+          <span style={lineContentStyle}>{displayContent}</span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div ref={containerRef} style={{ height: '100%', width: '100%', backgroundColor: '#1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
