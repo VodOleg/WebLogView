@@ -17,6 +17,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [renderAnsiTopPane, setRenderAnsiTopPane] = useState(true);
   const [renderAnsiBottomPane, setRenderAnsiBottomPane] = useState(true);
+  const [highlightedLineIndex, setHighlightedLineIndex] = useState(null);
 
   const { sendMessage, lastMessage, connectionStatus } = useWebSocket(
     `ws://${window.location.host}/ws`
@@ -129,28 +130,54 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   };
 
   const filteredLines = useMemo(() => {
-    let filtered = lines;
+    let filtered = [];
+    let originalIndices = [];
 
     if (includeFilter) {
       try {
         const regex = new RegExp(includeFilter, 'i');
-        filtered = filtered.filter(line => regex.test(line));
+        lines.forEach((line, index) => {
+          if (regex.test(line)) {
+            filtered.push(line);
+            originalIndices.push(index);
+          }
+        });
       } catch (e) {
-        // Invalid regex, skip filtering
+        // Invalid regex, use all lines
+        filtered = lines;
+        originalIndices = lines.map((_, i) => i);
       }
+    } else {
+      filtered = lines;
+      originalIndices = lines.map((_, i) => i);
     }
 
     if (excludeFilter) {
       try {
         const regex = new RegExp(excludeFilter, 'i');
-        filtered = filtered.filter(line => !regex.test(line));
+        const temp = [];
+        const tempIndices = [];
+        filtered.forEach((line, i) => {
+          if (!regex.test(line)) {
+            temp.push(line);
+            tempIndices.push(originalIndices[i]);
+          }
+        });
+        filtered = temp;
+        originalIndices = tempIndices;
       } catch (e) {
         // Invalid regex, skip filtering
       }
     }
 
-    return filtered;
+    return { lines: filtered, originalIndices };
   }, [lines, includeFilter, excludeFilter]);
+
+  const handleLineClick = (filteredIndex) => {
+    const originalIndex = filteredLines.originalIndices[filteredIndex];
+    setHighlightedLineIndex(originalIndex);
+    setAutoScroll(false);
+  };
 
   const hasLog = lines.length > 0;
   const hasFilters = includeFilter || excludeFilter;
@@ -170,6 +197,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
               autoScroll={autoScroll}
               title="All Lines"
               renderAnsi={renderAnsiTopPane}
+              highlightedLineIndex={highlightedLineIndex}
             />
           ) : (
             <DropZone isDragging={isDragging} onFileSelect={handleFileDrop} />
@@ -183,7 +211,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
             onExcludeFilterChange={setExcludeFilter}
             autoScroll={autoScroll}
             onAutoScrollChange={setAutoScroll}
-            filteredLineCount={filteredLines.length}
+            filteredLineCount={filteredLines.lines.length}
             totalLines={lines.length}
             onSettingsClick={() => setSettingsOpen(true)}
           />
@@ -191,10 +219,11 @@ export function LogViewerTab({ tabId, onTitleChange }) {
         bottomPane={
           hasLog ? (
             <LogViewer
-              lines={filteredLines}
+              lines={filteredLines.lines}
               autoScroll={autoScroll}
               title={hasFilters ? "Filtered Lines" : "All Lines"}
               renderAnsi={renderAnsiBottomPane}
+              onLineClick={handleLineClick}
             />
           ) : (
             <div style={{ height: '100%', backgroundColor: '#1e1e1e' }} />

@@ -19,7 +19,7 @@ const ansiConverter = new AnsiToHtml({
   }
 });
 
-export function LogViewer({ lines, autoScroll, title, renderAnsi = false }) {
+export function LogViewer({ lines, autoScroll, title, renderAnsi = false, highlightedLineIndex = null, onLineClick = null }) {
   const listRef = useRef(null);
   const containerRef = useRef(null);
   const [height, setHeight] = useState(400);
@@ -29,6 +29,13 @@ export function LogViewer({ lines, autoScroll, title, renderAnsi = false }) {
       listRef.current.scrollToItem(lines.length - 1, 'end');
     }
   }, [lines, autoScroll]);
+
+  useEffect(() => {
+    // Scroll to highlighted line
+    if (highlightedLineIndex !== null && listRef.current) {
+      listRef.current.scrollToItem(highlightedLineIndex, 'center');
+    }
+  }, [highlightedLineIndex]);
 
   useEffect(() => {
     const updateHeight = () => {
@@ -54,10 +61,26 @@ export function LogViewer({ lines, autoScroll, title, renderAnsi = false }) {
   const Row = ({ index, style }) => {
     const lineContent = lines[index];
     const displayContent = renderAnsi ? ansiConverter.toHtml(lineContent) : lineContent;
+    const isHighlighted = highlightedLineIndex === index;
     
     return (
-      <div style={{ ...style, ...rowStyle }}>
-        <span style={lineNumberStyle}>{index + 1}</span>
+      <div 
+        style={{ 
+          ...style, 
+          ...rowStyle,
+          backgroundColor: isHighlighted ? '#3a3d41' : 'transparent'
+        }}
+      >
+        <span 
+          style={{
+            ...lineNumberStyle,
+            cursor: onLineClick ? 'pointer' : 'default',
+            color: isHighlighted ? '#4fc1ff' : '#858585'
+          }}
+          onClick={() => onLineClick && onLineClick(index)}
+        >
+          {index + 1}
+        </span>
         {renderAnsi ? (
           <span 
             style={lineContentStyle} 
