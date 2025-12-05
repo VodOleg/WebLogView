@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/yourusername/weblogview/internal/config"
+	"github.com/yourusername/weblogview/internal/settings"
 	"github.com/yourusername/weblogview/internal/watcher"
 )
 
@@ -132,20 +133,7 @@ func (c *Client) writePump() {
 				return
 			}
 
-			w, err := c.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-
-			// Add queued messages to the current WebSocket message
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
-			}
-
-			if err := w.Close(); err != nil {
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
 
@@ -181,7 +169,7 @@ func (c *Client) handleOpenFile(msg *Message) {
 	// Determine tail lines (use default if not specified)
 	tailLines := msg.Tail
 	if tailLines == 0 {
-		tailLines = c.config.TailLines
+		tailLines = settings.GetInstance().GetTailLines()
 	}
 
 	// Create file watcher

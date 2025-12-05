@@ -3,6 +3,7 @@ import { ControlBar } from './ControlBar';
 import { LogViewer } from './LogViewer';
 import { DropZone } from './DropZone';
 import { ResizablePanes } from './ResizablePanes';
+import { SettingsModal } from './SettingsModal';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export function LogViewerTab({ tabId, onTitleChange }) {
@@ -13,6 +14,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   const [connected, setConnected] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const { sendMessage, lastMessage, connectionStatus } = useWebSocket(
     `ws://${window.location.host}/ws`
@@ -62,7 +64,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
       const message = {
         type: 'open',
         path: filePath,
-        tail: 1000,
+        // tail is omitted - backend will use settings value
       };
       console.log('Sending message:', message);
       sendMessage(message);
@@ -156,6 +158,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
             onAutoScrollChange={setAutoScroll}
             filteredLineCount={filteredLines.length}
             totalLines={lines.length}
+            onSettingsClick={() => setSettingsOpen(true)}
           />
         }
         bottomPane={
@@ -169,6 +172,10 @@ export function LogViewerTab({ tabId, onTitleChange }) {
             <div style={{ height: '100%', backgroundColor: '#1e1e1e' }} />
           )
         }
+      />
+      <SettingsModal 
+        isOpen={settingsOpen} 
+        onClose={() => setSettingsOpen(false)} 
       />
     </div>
   );

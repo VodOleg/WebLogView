@@ -7,6 +7,7 @@ export function ControlBar({
   onAutoScrollChange,
   filteredLineCount,
   totalLines,
+  onSettingsClick,
 }) {
   return (
     <div style={styles.controlBar}>
@@ -44,6 +45,13 @@ export function ControlBar({
             </>
           )}
         </div>
+        <button 
+          style={styles.settingsButton}
+          onClick={onSettingsClick}
+          title="Settings"
+        >
+          ⚙️
+        </button>
       </div>
     </div>
   );
@@ -81,8 +89,20 @@ const styles = {
   },
   stats: {
     fontSize: '13px',
-    color: '#cccccc',
+    color: '#888888',
     whiteSpace: 'nowrap',
-    fontWeight: '500',
+  },
+  settingsButton: {
+    background: 'none',
+    border: '1px solid #555',
+    borderRadius: '4px',
+    color: '#e0e0e0',
+    cursor: 'pointer',
+    padding: '6px 12px',
+    fontSize: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    whiteSpace: 'nowrap',
   },
 };

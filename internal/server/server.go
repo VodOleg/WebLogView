@@ -1,10 +1,12 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/yourusername/weblogview/internal/config"
+	"github.com/yourusername/weblogview/internal/settings"
 	"github.com/yourusername/weblogview/internal/websocket"
 )
 
@@ -31,6 +33,7 @@ func (s *Server) Start() error {
 	// Register HTTP handlers
 	http.HandleFunc("/", s.handleIndex)
 	http.HandleFunc("/api/health", s.handleHealth)
+	http.HandleFunc("/api/settings", s.handleSettings)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		websocket.HandleWebSocket(s.hub, s.config, w, r)
 	})
@@ -64,4 +67,48 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+// handleSettings handles settings GET/POST requests
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appSettings := settings.GetInstance()
+
+	switch r.Method {
+	case "GET":
+		// Return current settings
+		type SettingsResponse struct {
+			TailLines int `json:"tailLines"`
+		}
+		response := SettingsResponse{
+			TailLines: appSettings.GetTailLines(),
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+	case "POST":
+		// Update settings
+		var update struct {
+			TailLines int `json:"tailLines"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if update.TailLines > 0 {
+			appSettings.SetTailLines(update.TailLines)
+			if err := appSettings.Save(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		w.Write([]byte(`{"status":"ok"}`))
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
