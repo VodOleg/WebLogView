@@ -4,7 +4,7 @@ import { FixedSizeList as List } from 'react-window';
 export function LogViewer({ lines, autoScroll, title }) {
   const listRef = useRef(null);
   const containerRef = useRef(null);
-  const [height, setHeight] = useState(600);
+  const [height, setHeight] = useState(400);
 
   useEffect(() => {
     if (autoScroll && listRef.current && lines.length > 0) {
@@ -16,14 +16,22 @@ export function LogViewer({ lines, autoScroll, title }) {
     const updateHeight = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setHeight(rect.height - 30); // Subtract title bar height
+        const titleHeight = title ? 30 : 0;
+        setHeight(Math.max(100, rect.height - titleHeight));
       }
     };
 
     updateHeight();
-    window.addEventListener('resize', updateHeight);
-    return () => window.removeEventListener('resize', updateHeight);
-  }, []);
+    
+    const resizeObserver = new ResizeObserver(updateHeight);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [title]);
 
   const Row = ({ index, style }) => (
     <div style={{ ...style, ...rowStyle }}>
@@ -33,21 +41,23 @@ export function LogViewer({ lines, autoScroll, title }) {
   );
 
   return (
-    <div ref={containerRef} style={{ height: '100%', backgroundColor: '#1e1e1e', display: 'flex', flexDirection: 'column' }}>
+    <div ref={containerRef} style={{ height: '100%', width: '100%', backgroundColor: '#1e1e1e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {title && (
         <div style={titleBarStyle}>
           {title}
         </div>
       )}
-      <List
-        ref={listRef}
-        height={height}
-        itemCount={lines.length}
-        itemSize={20}
-        width="100%"
-      >
-        {Row}
-      </List>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <List
+          ref={listRef}
+          height={height}
+          itemCount={lines.length}
+          itemSize={20}
+          width="100%"
+        >
+          {Row}
+        </List>
+      </div>
     </div>
   );
 }
@@ -68,6 +78,7 @@ const rowStyle = {
   lineHeight: '20px',
   borderBottom: '1px solid #2d2d2d',
   padding: '0 8px',
+  minWidth: 'max-content',
 };
 
 const lineNumberStyle = {
@@ -82,4 +93,5 @@ const lineContentStyle = {
   color: '#d4d4d4',
   whiteSpace: 'pre',
   flex: 1,
+  overflow: 'visible',
 };

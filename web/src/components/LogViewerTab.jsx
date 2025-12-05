@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'preact/hooks';
 import { ControlBar } from './ControlBar';
 import { LogViewer } from './LogViewer';
 import { DropZone } from './DropZone';
+import { ResizablePanes } from './ResizablePanes';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export function LogViewerTab({ tabId, onTitleChange }) {
@@ -28,35 +29,49 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   }, [lastMessage]);
 
   const handleWebSocketMessage = (message) => {
+    console.log('Processing message:', message.data);
     const data = JSON.parse(message.data);
     
     switch (data.type) {
       case 'lines':
+        console.log('Received new lines:', data.lines.length);
         setLines(prev => [...prev, ...data.lines]);
         break;
       case 'initial':
+        console.log('Received initial lines:', data.lines.length);
         setLines(data.lines || []);
         break;
       case 'clear':
+        console.log('Clearing lines');
         setLines([]);
         break;
       case 'error':
-        console.error('WebSocket error:', data.message);
+        console.error('WebSocket error:', data.message || data.error);
+        alert('Error: ' + (data.message || data.error));
         break;
       default:
         console.warn('Unknown message type:', data.type);
     }
   };
 
-  const handleFileDrop = (filePath, name) => {
+  const handleFileDrop = (filePath) => {
+    console.log('Opening file:', filePath, 'Connected:', connected);
     if (filePath && connected) {
-      sendMessage({
+      // Extract filename from path for tab title
+      const fileName = filePath.split('/').pop().split('\\').pop();
+      const message = {
         type: 'open',
         path: filePath,
         tail: 1000,
-      });
-      setFileName(name);
-      onTitleChange(name);
+      };
+      console.log('Sending message:', message);
+      sendMessage(message);
+      setFileName(fileName);
+      onTitleChange(fileName);
+    } else {
+      if (!connected) {
+        alert('WebSocket not connected. Please wait...');
+      }
     }
   };
 
@@ -77,7 +92,11 @@ export function LogViewerTab({ tabId, onTitleChange }) {
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const file = files[0];
-      handleFileDrop(file.path || file.name, file.name);
+      // Note: file.path is only available in Electron, not in browsers
+      // For now, we'll just use the name and user needs to enter full path
+      if (file.path) {
+        handleFileDrop(file.path);
+      }
     }
   };
 
@@ -115,43 +134,42 @@ export function LogViewerTab({ tabId, onTitleChange }) {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Main Log Area A (always shows full log) */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        {hasLog ? (
-          <LogViewer
-            lines={lines}
+      <ResizablePanes
+        topPane={
+          hasLog ? (
+            <LogViewer
+              lines={lines}
+              autoScroll={autoScroll}
+              title="All Lines"
+            />
+          ) : (
+            <DropZone isDragging={isDragging} onFileSelect={handleFileDrop} />
+          )
+        }
+        controlBar={
+          <ControlBar
+            includeFilter={includeFilter}
+            onIncludeFilterChange={setIncludeFilter}
+            excludeFilter={excludeFilter}
+            onExcludeFilterChange={setExcludeFilter}
             autoScroll={autoScroll}
-            title="All Lines"
+            onAutoScrollChange={setAutoScroll}
+            filteredLineCount={filteredLines.length}
+            totalLines={lines.length}
           />
-        ) : (
-          <DropZone isDragging={isDragging} />
-        )}
-      </div>
-
-      {/* Control Bar */}
-      <ControlBar
-        includeFilter={includeFilter}
-        onIncludeFilterChange={setIncludeFilter}
-        excludeFilter={excludeFilter}
-        onExcludeFilterChange={setExcludeFilter}
-        autoScroll={autoScroll}
-        onAutoScrollChange={setAutoScroll}
-        filteredLineCount={filteredLines.length}
-        totalLines={lines.length}
+        }
+        bottomPane={
+          hasLog ? (
+            <LogViewer
+              lines={filteredLines}
+              autoScroll={autoScroll}
+              title={hasFilters ? "Filtered Lines" : "All Lines"}
+            />
+          ) : (
+            <div style={{ height: '100%', backgroundColor: '#1e1e1e' }} />
+          )
+        }
       />
-
-      {/* Main Log Area B (filtered results - always visible) */}
-      <div style={{ flex: 1, borderTop: '1px solid #3c3c3c' }}>
-        {hasLog ? (
-          <LogViewer
-            lines={filteredLines}
-            autoScroll={autoScroll}
-            title={hasFilters ? "Filtered Lines" : "All Lines"}
-          />
-        ) : (
-          <div style={{ height: '100%', backgroundColor: '#1e1e1e' }} />
-        )}
-      </div>
     </div>
   );
 }

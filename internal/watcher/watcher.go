@@ -80,15 +80,15 @@ func (fw *FileWatcher) Start() error {
 func (fw *FileWatcher) Stop() {
 	close(fw.stopChan)
 	fw.wg.Wait()
-	
+
 	if fw.file != nil {
 		fw.file.Close()
 	}
-	
+
 	if fw.watcher != nil {
 		fw.watcher.Close()
 	}
-	
+
 	close(fw.Lines)
 }
 
@@ -98,10 +98,10 @@ func (fw *FileWatcher) readTail() error {
 	// TODO: Optimize for large files by seeking from the end
 	lines := []string{}
 	scanner := bufio.NewScanner(fw.file)
-	
-	// Set a larger buffer for long lines
+
+	// Set a larger buffer for long lines - max 10MB per line
 	buf := make([]byte, 0, fw.config.BufferSize)
-	scanner.Buffer(buf, fw.config.BufferSize)
+	scanner.Buffer(buf, 10*1024*1024)
 
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
@@ -166,10 +166,10 @@ func (fw *FileWatcher) watch() {
 // readNewLines reads new lines that have been appended to the file
 func (fw *FileWatcher) readNewLines() {
 	scanner := bufio.NewScanner(fw.file)
-	
-	// Set a larger buffer for long lines
+
+	// Set a larger buffer for long lines - max 10MB per line
 	buf := make([]byte, 0, fw.config.BufferSize)
-	scanner.Buffer(buf, fw.config.BufferSize)
+	scanner.Buffer(buf, 10*1024*1024)
 
 	for scanner.Scan() {
 		select {

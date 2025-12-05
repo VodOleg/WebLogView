@@ -45,12 +45,12 @@ type Client struct {
 
 // Message represents a WebSocket message
 type Message struct {
-	Type    string          `json:"type"`
-	Path    string          `json:"path,omitempty"`
-	Tail    int             `json:"tail,omitempty"`
-	Lines   []string        `json:"lines,omitempty"`
-	Message string          `json:"message,omitempty"`
-	Error   string          `json:"error,omitempty"`
+	Type    string   `json:"type"`
+	Path    string   `json:"path,omitempty"`
+	Tail    int      `json:"tail,omitempty"`
+	Lines   []string `json:"lines,omitempty"`
+	Message string   `json:"message,omitempty"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // HandleWebSocket handles WebSocket connection requests
@@ -193,17 +193,37 @@ func (c *Client) handleOpenFile(msg *Message) {
 
 	c.watcher = fw
 
-	// Start watching in a goroutine
+	// Collect initial lines before starting the watcher
+	initialLines := []string{}
+	initialDone := make(chan struct{})
+
+	// Start collecting initial lines in a goroutine
 	go func() {
 		for line := range fw.Lines {
-			c.sendLines([]string{line})
+			select {
+			case <-initialDone:
+				// After initial load, send lines as they come
+				c.sendNewLines([]string{line})
+			default:
+				// During initial load, collect lines
+				initialLines = append(initialLines, line)
+			}
 		}
 	}()
 
-	// Send initial lines
+	// Start watching (this sends initial lines to fw.Lines channel)
 	if err := fw.Start(); err != nil {
 		c.sendError("Failed to start watching: " + err.Error())
 		return
+	}
+
+	// Give a moment for initial lines to be collected
+	time.Sleep(100 * time.Millisecond)
+	close(initialDone)
+
+	// Send initial lines to client
+	if len(initialLines) > 0 {
+		c.sendInitialLines(initialLines)
 	}
 }
 
@@ -215,10 +235,20 @@ func (c *Client) handleCloseFile() {
 	}
 }
 
-// sendLines sends log lines to the client
-func (c *Client) sendLines(lines []string) {
+// sendInitialLines sends initial log lines to the client
+func (c *Client) sendInitialLines(lines []string) {
 	msg := Message{
-		Type:  "append",
+		Type:  "initial",
+		Lines: lines,
+	}
+	data, _ := json.Marshal(msg)
+	c.send <- data
+}
+
+// sendNewLines sends new log lines to the client
+func (c *Client) sendNewLines(lines []string) {
+	msg := Message{
+		Type:  "lines",
 		Lines: lines,
 	}
 	data, _ := json.Marshal(msg)

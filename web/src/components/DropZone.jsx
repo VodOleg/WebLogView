@@ -1,4 +1,15 @@
-export function DropZone({ isDragging }) {
+import { useState } from 'preact/hooks';
+
+export function DropZone({ isDragging, onFileSelect }) {
+  const [filePath, setFilePath] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (filePath.trim()) {
+      onFileSelect(filePath.trim());
+    }
+  };
+
   return (
     <div style={styles.container}>
       <div style={{
@@ -7,10 +18,23 @@ export function DropZone({ isDragging }) {
       }}>
         <div style={styles.icon}>📄</div>
         <div style={styles.message}>
-          {isDragging ? 'Drop log file here' : 'Drop log file here to view'}
+          Enter log file path to view
         </div>
+        <form onSubmit={handleSubmit} style={styles.form}>
+          <input
+            type="text"
+            placeholder="/path/to/your/logfile.log"
+            value={filePath}
+            onInput={(e) => setFilePath(e.target.value)}
+            style={styles.input}
+            autoFocus
+          />
+          <button type="submit" style={styles.button}>
+            Open
+          </button>
+        </form>
         <div style={styles.hint}>
-          Drag and drop a log file to start monitoring
+          Enter the full path to a log file on your system
         </div>
       </div>
     </div>
@@ -58,5 +82,32 @@ const styles = {
   hint: {
     fontSize: '14px',
     color: '#858585',
+  },
+  form: {
+    display: 'flex',
+    gap: '8px',
+    width: '100%',
+    maxWidth: '500px',
+    margin: '20px 0 10px 0',
+  },
+  input: {
+    flex: 1,
+    padding: '8px 12px',
+    backgroundColor: '#3c3c3c',
+    border: '1px solid #555',
+    color: '#d4d4d4',
+    borderRadius: '4px',
+    fontSize: '13px',
+    outline: 'none',
+  },
+  button: {
+    padding: '8px 24px',
+    backgroundColor: '#0e639c',
+    border: 'none',
+    color: 'white',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '500',
   },
 };

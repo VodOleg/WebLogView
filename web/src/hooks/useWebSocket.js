@@ -8,14 +8,16 @@ export function useWebSocket(url) {
 
   const connect = useCallback(() => {
     try {
+      console.log('Connecting to WebSocket:', url);
       const ws = new WebSocket(url);
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('WebSocket connected successfully');
         setConnectionStatus('connected');
       };
 
       ws.onmessage = (event) => {
+        console.log('WebSocket message received:', event.data);
         setLastMessage(event);
       };
 
@@ -24,8 +26,8 @@ export function useWebSocket(url) {
         setConnectionStatus('error');
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected', event.code, event.reason);
         setConnectionStatus('disconnected');
         
         // Attempt to reconnect after 3 seconds
