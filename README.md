@@ -1,6 +1,6 @@
 # WebLogView
 
-A cross-platform, web-based log viewer with real-time file monitoring. A modern alternative to BareTail.
+A cross-platform, web-based log viewer with real-time file monitoring.
 
 ## Features
 

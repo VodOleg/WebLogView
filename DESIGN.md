@@ -1,7 +1,7 @@
 # WebLogView - High Level Design
 
 ## Overview
-A cross-platform, web-based log viewer with real-time file monitoring, designed as a self-hosted alternative to BareTail that works on Windows, macOS, and Linux.
+A cross-platform, web-based log viewer with real-time file monitoring that works on Windows, macOS, and Linux.
 
 ## Architecture
 
