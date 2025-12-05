@@ -6,7 +6,7 @@ A cross-platform, web-based log viewer with real-time file monitoring.
 
 ### Build
 ```bash
-go build -o weblogview.exe ./cmd/weblogview
+go build -o weblogview.exe ./cmd
 ```
 
 ### Run
@@ -35,7 +35,7 @@ go mod download
 
 ### Run in Development Mode
 ```bash
-go run ./cmd/weblogview
+go run ./cmd
 ```
 
 ## Architecture
@@ -47,7 +47,7 @@ See [DESIGN.md](DESIGN.md) for detailed architecture and design documentation.
 ```
 WebLogView/
 ├── cmd/
-│   └── weblogview/         # Application entry point
+│   └── main.go             # Application entry point
 ├── internal/
 │   ├── config/            # Configuration management
 │   ├── server/            # HTTP server

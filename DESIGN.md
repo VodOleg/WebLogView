@@ -11,7 +11,7 @@ A cross-platform, web-based log viewer with real-time file monitoring, designed 
 ┌─────────────────────────────────────────────────────────────┐
 │                         Browser (Client)                     │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │  UI Layer (Vanilla JS + Virtual Scrolling)             │ │
+│  │  UI Layer (Preact + Virtual Scrolling)                 │ │
 │  │  - Log display with virtual scrolling                  │ │
 │  │  - Filter input (regex support)                        │ │
 │  │  - File selection controls                             │ │

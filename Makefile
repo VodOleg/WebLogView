@@ -2,7 +2,7 @@
 
 # Build the application
 build:
-	go build -o weblogview.exe ./cmd/weblogview
+	go build -o weblogview ./cmd
 
 # Build for all platforms
 build-all:
