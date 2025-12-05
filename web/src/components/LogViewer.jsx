@@ -1,14 +1,29 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { FixedSizeList as List } from 'react-window';
 
-export function LogViewer({ lines, autoScroll }) {
+export function LogViewer({ lines, autoScroll, title }) {
   const listRef = useRef(null);
+  const containerRef = useRef(null);
+  const [height, setHeight] = useState(600);
 
   useEffect(() => {
     if (autoScroll && listRef.current && lines.length > 0) {
       listRef.current.scrollToItem(lines.length - 1, 'end');
     }
   }, [lines, autoScroll]);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setHeight(rect.height - 30); // Subtract title bar height
+      }
+    };
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
 
   const Row = ({ index, style }) => (
     <div style={{ ...style, ...rowStyle }}>
@@ -18,10 +33,15 @@ export function LogViewer({ lines, autoScroll }) {
   );
 
   return (
-    <div style={{ flex: 1, backgroundColor: '#1e1e1e' }}>
+    <div ref={containerRef} style={{ height: '100%', backgroundColor: '#1e1e1e', display: 'flex', flexDirection: 'column' }}>
+      {title && (
+        <div style={titleBarStyle}>
+          {title}
+        </div>
+      )}
       <List
         ref={listRef}
-        height={window.innerHeight - 120} // Adjust based on header height
+        height={height}
         itemCount={lines.length}
         itemSize={20}
         width="100%"
@@ -31,6 +51,15 @@ export function LogViewer({ lines, autoScroll }) {
     </div>
   );
 }
+
+const titleBarStyle = {
+  backgroundColor: '#2d2d30',
+  color: '#cccccc',
+  padding: '6px 12px',
+  fontSize: '12px',
+  fontWeight: '500',
+  borderBottom: '1px solid #3c3c3c',
+};
 
 const rowStyle = {
   display: 'flex',
