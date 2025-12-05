@@ -18,11 +18,10 @@ build-all:
 
 # Run the application
 run:
-	go run ./cmd/weblogview
-
+	go run ./cmd
 # Run in development mode (with auto-reload would require additional tools)
 dev:
-	go run ./cmd/weblogview
+	go run ./cmd
 
 # Install dependencies
 install:

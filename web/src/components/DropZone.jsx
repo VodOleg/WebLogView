@@ -24,7 +24,6 @@ export function DropZone({ isDragging, onFileSelect }) {
   const handleRecentFileClick = (path) => {
     setFilePath(path);
     setShowRecent(false);
-    onFileSelect(path);
   };
 
   return (
