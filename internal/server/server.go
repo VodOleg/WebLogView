@@ -39,6 +39,7 @@ func (s *Server) Start() error {
 	http.HandleFunc("/", s.handleIndex)
 	http.HandleFunc("/api/health", s.handleHealth)
 	http.HandleFunc("/api/settings", s.handleSettings)
+	http.HandleFunc("/api/recent-files", s.handleRecentFiles)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		websocket.HandleWebSocket(s.hub, s.config, w, r)
 	})
@@ -91,11 +92,13 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			TailLines            int  `json:"tailLines"`
 			RenderAnsiTopPane    bool `json:"renderAnsiTopPane"`
 			RenderAnsiBottomPane bool `json:"renderAnsiBottomPane"`
+			PollingIntervalMs    int  `json:"pollingIntervalMs"`
 		}
 		response := SettingsResponse{
 			TailLines:            appSettings.GetTailLines(),
 			RenderAnsiTopPane:    appSettings.GetRenderAnsiTopPane(),
 			RenderAnsiBottomPane: appSettings.GetRenderAnsiBottomPane(),
+			PollingIntervalMs:    appSettings.PollingIntervalMs,
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -107,6 +110,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			TailLines            int   `json:"tailLines"`
 			RenderAnsiTopPane    *bool `json:"renderAnsiTopPane"`
 			RenderAnsiBottomPane *bool `json:"renderAnsiBottomPane"`
+			PollingIntervalMs    int   `json:"pollingIntervalMs"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -122,6 +126,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		if update.RenderAnsiBottomPane != nil {
 			appSettings.SetRenderAnsiBottomPane(*update.RenderAnsiBottomPane)
 		}
+		if update.PollingIntervalMs > 0 {
+			appSettings.PollingIntervalMs = update.PollingIntervalMs
+		}
 
 		if err := appSettings.Save(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -132,5 +139,22 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleRecentFiles handles recent files GET requests
+func (s *Server) handleRecentFiles(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	appSettings := settings.GetInstance()
+	recentFiles := appSettings.GetRecentFiles()
+
+	if err := json.NewEncoder(w).Encode(recentFiles); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -5,6 +5,7 @@ export function SettingsModal({ isOpen, onClose }) {
   const [tailLines, setTailLines] = useState(1000);
   const [renderAnsiTopPane, setRenderAnsiTopPane] = useState(false);
   const [renderAnsiBottomPane, setRenderAnsiBottomPane] = useState(true);
+  const [pollingIntervalMs, setPollingIntervalMs] = useState(500);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -22,6 +23,7 @@ export function SettingsModal({ isOpen, onClose }) {
       setTailLines(data.tailLines);
       setRenderAnsiTopPane(data.renderAnsiTopPane);
       setRenderAnsiBottomPane(data.renderAnsiBottomPane);
+      setPollingIntervalMs(data.pollingIntervalMs || 500);
     } catch (err) {
       console.error('Failed to load settings:', err);
       setError(err.message);
@@ -38,7 +40,8 @@ export function SettingsModal({ isOpen, onClose }) {
         body: JSON.stringify({ 
           tailLines: parseInt(tailLines),
           renderAnsiTopPane,
-          renderAnsiBottomPane
+          renderAnsiBottomPane,
+          pollingIntervalMs: parseInt(pollingIntervalMs)
         })
       });
       if (!response.ok) throw new Error('Failed to save settings');
@@ -80,6 +83,25 @@ export function SettingsModal({ isOpen, onClose }) {
             <div style={styles.helpText}>
               Number of lines to load initially when opening a log file. 
               Higher values may impact performance.
+            </div>
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>
+              Polling Interval (milliseconds)
+              <input
+                type="number"
+                min="100"
+                max="5000"
+                step="100"
+                value={pollingIntervalMs}
+                onChange={(e) => setPollingIntervalMs(e.target.value)}
+                style={styles.input}
+              />
+            </label>
+            <div style={styles.helpText}>
+              Fallback interval for checking file changes when live events aren't detected. 
+              Lower values = faster updates but more CPU usage. Requires restart to apply.
             </div>
           </div>
 

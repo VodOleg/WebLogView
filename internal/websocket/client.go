@@ -181,6 +181,9 @@ func (c *Client) handleOpenFile(msg *Message) {
 
 	c.watcher = fw
 
+	// Add to recent files
+	settings.GetInstance().AddRecentFile(msg.Path)
+
 	// Collect initial lines before starting the watcher
 	initialLines := []string{}
 	initialDone := make(chan struct{})

@@ -6,9 +6,11 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"github.com/yourusername/weblogview/internal/config"
 	"github.com/yourusername/weblogview/internal/server"
+	"github.com/yourusername/weblogview/internal/settings"
 )
 
 func main() {
@@ -18,8 +20,12 @@ func main() {
 	noBrowser := flag.Bool("no-browser", false, "Don't automatically open browser")
 	flag.Parse()
 
+	// Load settings to get polling interval
+	appSettings := settings.GetInstance()
+
 	// Create configuration
 	cfg := config.New(*host, *port)
+	cfg.PollingInterval = time.Duration(appSettings.PollingIntervalMs) * time.Millisecond
 
 	// Print startup info
 	url := fmt.Sprintf("http://%s:%d", *host, *port)

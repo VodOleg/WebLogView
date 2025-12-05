@@ -9,9 +9,11 @@ import (
 
 // Settings represents application settings
 type Settings struct {
-	TailLines            int  `json:"tailLines"`            // Number of lines to load initially
-	RenderAnsiTopPane    bool `json:"renderAnsiTopPane"`    // Render ANSI codes in top pane (default: true - prettified)
-	RenderAnsiBottomPane bool `json:"renderAnsiBottomPane"` // Render ANSI codes in bottom pane (default: true - prettified)
+	TailLines            int      `json:"tailLines"`            // Number of lines to load initially
+	RenderAnsiTopPane    bool     `json:"renderAnsiTopPane"`    // Render ANSI codes in top pane (default: true - prettified)
+	RenderAnsiBottomPane bool     `json:"renderAnsiBottomPane"` // Render ANSI codes in bottom pane (default: true - prettified)
+	PollingIntervalMs    int      `json:"pollingIntervalMs"`    // Polling interval in milliseconds (default: 500ms)
+	RecentFiles          []string `json:"recentFiles"`          // Recently opened files (max 10)
 	mu                   sync.RWMutex
 }
 
@@ -24,9 +26,11 @@ var (
 func GetInstance() *Settings {
 	once.Do(func() {
 		instance = &Settings{
-			TailLines:            1000, // Default
-			RenderAnsiTopPane:    true, // Prettified by default
-			RenderAnsiBottomPane: true, // Prettified by default
+			TailLines:            1000,   // Default
+			RenderAnsiTopPane:    true,   // Prettified by default
+			RenderAnsiBottomPane: true,   // Prettified by default
+			PollingIntervalMs:    500,    // 500ms default
+			RecentFiles:          []string{}, // Empty list
 		}
 		instance.Load()
 	})
@@ -112,6 +116,59 @@ func (s *Settings) SetRenderAnsiBottomPane(render bool) {
 	s.mu.Lock()
 	s.RenderAnsiBottomPane = render
 	s.mu.Unlock()
+}
+
+// AddRecentFile adds a file to the recent files list (max 10, most recent first)
+func (s *Settings) AddRecentFile(filePath string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Remove if already exists
+	for i, f := range s.RecentFiles {
+		if f == filePath {
+			s.RecentFiles = append(s.RecentFiles[:i], s.RecentFiles[i+1:]...)
+			break
+		}
+	}
+
+	// Add to front
+	s.RecentFiles = append([]string{filePath}, s.RecentFiles...)
+
+	// Keep only last 10
+	if len(s.RecentFiles) > 10 {
+		s.RecentFiles = s.RecentFiles[:10]
+	}
+
+	// Save to disk
+	return s.saveUnlocked()
+}
+
+// GetRecentFiles returns the list of recent files
+func (s *Settings) GetRecentFiles() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Return a copy to prevent external modification
+	result := make([]string, len(s.RecentFiles))
+	copy(result, s.RecentFiles)
+	return result
+}
+
+// saveUnlocked saves settings without locking (internal use only)
+func (s *Settings) saveUnlocked() error {
+	settingsPath := getSettingsPath()
+	
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(settingsPath, data, 0644)
 }
 
 // getSettingsPath returns the path to the settings file
