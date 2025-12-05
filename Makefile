@@ -1,8 +1,13 @@
-.PHONY: build run clean test install dev
+.PHONY: build run clean test install dev release
 
-# Build the application
+# Build the application (development)
 build:
 	go build -o weblogview ./cmd
+
+# Build release version (production with embedded frontend)
+release:
+	@echo "🚀 Building release..."
+	@bash scripts/build-release.sh
 
 # Build for all platforms
 build-all:
@@ -31,6 +36,8 @@ test:
 clean:
 	rm -f weblogview weblogview.exe
 	rm -rf dist/
+	rm -rf internal/server/static/*
+	rm -rf web/dist/
 
 # Format code
 fmt:

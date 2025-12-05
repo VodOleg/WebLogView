@@ -58,20 +58,16 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   }, [lastMessage]);
 
   const handleWebSocketMessage = (message) => {
-    console.log('Processing message:', message.data);
     const data = JSON.parse(message.data);
     
     switch (data.type) {
       case 'lines':
-        console.log('Received new lines:', data.lines.length);
         setLines(prev => [...prev, ...data.lines]);
         break;
       case 'initial':
-        console.log('Received initial lines:', data.lines.length);
         setLines(data.lines || []);
         break;
       case 'clear':
-        console.log('Clearing lines');
         setLines([]);
         break;
       case 'error':
@@ -84,7 +80,6 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   };
 
   const handleFileDrop = (filePath) => {
-    console.log('Opening file:', filePath, 'Connected:', connected);
     if (filePath && connected) {
       // Extract filename from path for tab title
       const fileName = filePath.split('/').pop().split('\\').pop();
@@ -93,7 +88,6 @@ export function LogViewerTab({ tabId, onTitleChange }) {
         path: filePath,
         // tail is omitted - backend will use settings value
       };
-      console.log('Sending message:', message);
       sendMessage(message);
       setFileName(fileName);
       onTitleChange(fileName);

@@ -1,14 +1,19 @@
 package server
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 
 	"github.com/yourusername/weblogview/internal/config"
 	"github.com/yourusername/weblogview/internal/settings"
 	"github.com/yourusername/weblogview/internal/websocket"
 )
+
+//go:embed static
+var staticFiles embed.FS
 
 // Server represents the HTTP server
 type Server struct {
@@ -45,22 +50,26 @@ func (s *Server) Start() error {
 
 // handleIndex serves the main HTML page
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	// For now, serve a simple placeholder
-	// We'll replace this with embedded files later
-	html := `<!DOCTYPE html>
-<html>
-<head>
-    <title>WebLogView</title>
-    <meta charset="UTF-8">
-</head>
-<body>
-    <h1>WebLogView</h1>
-    <p>Frontend coming soon...</p>
-    <p>WebSocket endpoint: <code>ws://` + s.config.Host + `:` + fmt.Sprintf("%d", s.config.Port) + `/ws</code></p>
-</body>
-</html>`
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(html))
+	// Serve embedded static files
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		http.Error(w, "Failed to load static files", http.StatusInternalServerError)
+		return
+	}
+
+	// Try to serve the requested file, default to index.html for SPA
+	requestPath := r.URL.Path
+	if requestPath == "/" {
+		requestPath = "/index.html"
+	}
+
+	// Check if file exists
+	if _, err := staticFS.Open(requestPath[1:]); err != nil {
+		// File not found, serve index.html for SPA routing
+		requestPath = "/index.html"
+	}
+
+	http.FileServer(http.FS(staticFS)).ServeHTTP(w, r)
 }
 
 // handleHealth handles health check requests

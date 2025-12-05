@@ -36,6 +36,13 @@ web/.vite/
 web/package-lock.json
 web/yarn.lock
 
+# Embedded static files (generated during build)
+internal/server/static/*
+!internal/server/static/.gitkeep
+
+# Build artifacts
+dist/
+
 # Logs for testing
 *.log
 test-logs/
