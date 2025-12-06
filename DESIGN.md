@@ -1,7 +1,7 @@
 # WebLogView - High Level Design
 
 ## Overview
-A cross-platform, web-based log viewer with real-time file monitoring that works on Windows, macOS, and Linux.
+A cross-platform, web-based log viewer with real-time file monitoring and Kubernetes pod log streaming that works on Windows, macOS, and Linux.
 
 ## Architecture
 
@@ -12,9 +12,11 @@ A cross-platform, web-based log viewer with real-time file monitoring that works
 │                         Browser (Client)                     │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  UI Layer (Preact + Virtual Scrolling)                 │ │
-│  │  - Log display with virtual scrolling                  │ │
+│  │  - Tabbed interface for multiple sources               │ │
+│  │  - Dual-pane layout (all lines + filtered)             │ │
+│  │  - File selection OR Kubernetes connector              │ │
+│  │  - K8s: Context/Namespace/Pod/Container dropdowns      │ │
 │  │  - Filter input (regex support)                        │ │
-│  │  - File selection controls                             │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                            ▲                                 │
 │                            │ WebSocket + HTTP                │
@@ -25,9 +27,13 @@ A cross-platform, web-based log viewer with real-time file monitoring that works
 │                   Go Backend Server                          │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  HTTP Server (Static files + API endpoints)            │ │
+│  │  - /api/k8s/contexts, namespaces, pods, containers     │ │
+│  │  - /api/recent-files, recent-namespaces                │ │
 │  └────────────────────────────────────────────────────────┘ │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  WebSocket Handler (Real-time log streaming)           │ │
+│  │  - File watcher or K8s watcher per client              │ │
+│  │  - Message types: open, open-k8s, lines, error         │ │
 │  └────────────────────────────────────────────────────────┘ │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  File Watcher (fsnotify)                               │ │
@@ -36,18 +42,20 @@ A cross-platform, web-based log viewer with real-time file monitoring that works
 │  │  - Handle file rotation                                │ │
 │  └────────────────────────────────────────────────────────┘ │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │  Log Reader                                            │ │
-│  │  - Read file content efficiently                       │ │
-│  │  - Handle large files (streaming)                      │ │
-│  │  - Support seeking/pagination                          │ │
+│  │  Kubernetes Watcher (client-go)                        │ │
+│  │  - Stream pod logs via K8s API                         │ │
+│  │  - List contexts, namespaces, pods, containers         │ │
+│  │  - Context switching support                           │ │
+│  │  - Namespace validation                                │ │
 │  └────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────┘
                              │
-                             ▼
-                    ┌────────────────┐
-                    │   Log Files    │
-                    │  (File System) │
-                    └────────────────┘
+                    ┌────────┴────────┐
+                    ▼                 ▼
+            ┌───────────────┐  ┌──────────────┐
+            │   Log Files   │  │ Kubernetes   │
+            │ (File System) │  │   Clusters   │
+            └───────────────┘  └──────────────┘
 ```
 
 ## Data Flow
@@ -62,13 +70,24 @@ A cross-platform, web-based log viewer with real-time file monitoring that works
 7. Backend sends content to frontend in chunks
 8. Frontend renders using virtual scrolling
 
-### Real-time Monitoring
+### Real-time Monitoring (Files)
 1. Backend watches file for changes (fsnotify)
 2. New lines detected
 3. Backend reads new content
 4. Backend streams to connected clients via WebSocket
 5. Frontend appends to virtual list
 6. Auto-scroll if enabled
+
+### Real-time Monitoring (Kubernetes)
+1. User selects context, namespace, pod, container via UI
+2. Frontend sends "open-k8s" message via WebSocket
+3. Backend creates Kubernetes client using client-go
+4. Backend validates namespace existence
+5. Backend starts streaming pod logs via K8s API
+6. Backend forwards log lines to WebSocket client
+7. Frontend appends to virtual list
+8. Auto-scroll if enabled
+9. Namespace saved to recent history
 
 ### Filtering
 1. User types filter pattern (regex) in include/exclude inputs
@@ -85,7 +104,17 @@ A cross-platform, web-based log viewer with real-time file monitoring that works
 - `net/http` - HTTP server and static file serving
 - `gorilla/websocket` - WebSocket communication
 - `fsnotify/fsnotify` - File system monitoring
+- `k8s.io/client-go` - Kubernetes API client
+- `k8s.io/api` - Kubernetes API types
 - `embed` - Embed frontend files in binary
+
+**Kubernetes Integration:**
+- Reads `~/.kube/config` for cluster configuration
+- Lists and switches between contexts (clusters)
+- Discovers namespaces, pods, and containers
+- Streams logs using PodLogs() API with Follow=true
+- Validates namespace existence before listing pods
+- Graceful handling of context switching and disconnections
 
 **Architecture Patterns:**
 - Goroutine per file watcher
@@ -131,10 +160,17 @@ A cross-platform, web-based log viewer with real-time file monitoring that works
 ### HTTP Endpoints
 
 ```
-GET  /                          Serve main HTML
-GET  /static/*                  Static assets (JS, CSS)
-GET  /api/health               Health check
-POST /api/browse               Browse file system (optional)
+GET  /                              Serve main HTML
+GET  /static/*                      Static assets (JS, CSS)
+GET  /api/health                    Health check
+GET  /api/settings                  Get/update application settings
+GET  /api/recent-files              Get recently opened files
+GET  /api/recent-namespaces         Get recently used K8s namespaces
+GET  /api/k8s/contexts              List available K8s contexts
+POST /api/k8s/switch-context        Switch active K8s context
+GET  /api/k8s/namespaces            List namespaces in current context
+GET  /api/k8s/pods?namespace=X      List pods in namespace
+GET  /api/k8s/containers?namespace=X&pod=Y  List containers in pod
 ```
 
 ### WebSocket Protocol
@@ -144,17 +180,19 @@ POST /api/browse               Browse file system (optional)
 {
   "type": "open",
   "path": "/path/to/file.log",
-  "tail": 1000  // Load last N lines
+  "tail": 1000  // Load last N lines (optional, uses settings default)
 }
 
 {
-  "type": "close"  // Stop watching current file
+  "type": "open-k8s",
+  "namespace": "production",
+  "podName": "my-app-pod-abc123",
+  "containerName": "app",  // optional
+  "tail": 1000  // Load last N lines (optional, uses settings default)
 }
 
 {
-  "type": "seek",
-  "offset": 50000,  // Line number or byte offset
-  "count": 1000
+  "type": "close"  // Stop watching current source
 }
 ```
 
@@ -162,12 +200,11 @@ POST /api/browse               Browse file system (optional)
 ```json
 {
   "type": "initial",
-  "lines": ["line1", "line2", ...],
-  "totalLines": 150000
+  "lines": ["line1", "line2", ...]
 }
 
 {
-  "type": "append",
+  "type": "lines",
   "lines": ["new line 1", "new line 2"]
 }
 
@@ -177,9 +214,7 @@ POST /api/browse               Browse file system (optional)
 }
 
 {
-  "type": "metadata",
-  "fileSize": 1024000,
-  "encoding": "utf-8"
+  "type": "clear"
 }
 ```
 
@@ -233,29 +268,33 @@ WebLogView/
 ├── internal/
 │   ├── server/
 │   │   ├── server.go            # HTTP server setup
-│   │   └── handlers.go          # HTTP handlers
+│   │   └── handlers.go          # HTTP and API handlers
 │   ├── websocket/
 │   │   ├── hub.go               # WebSocket connection manager
 │   │   └── client.go            # Client connection handler
 │   ├── watcher/
 │   │   ├── watcher.go           # File watching logic
-│   │   └── reader.go            # File reading utilities
+│   │   ├── k8s_watcher.go       # Kubernetes log streaming
+│   │   ├── k8s_contexts.go      # K8s context management
+│   │   ├── k8s_namespaces.go    # Namespace listing
+│   │   └── k8s_pods.go          # Pod and container discovery
+│   ├── settings/
+│   │   └── settings.go          # Persistent settings (files, namespaces)
 │   └── config/
 │       └── config.go            # Configuration management
 ├── web/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── App.jsx              # Main application component
+│   │   │   ├── App.jsx              # Main application (tabs)
+│   │   │   ├── LogViewerTab.jsx     # Individual tab component
 │   │   │   ├── LogViewer.jsx        # Log display with virtual scrolling
-│   │   │   ├── FilterBar.jsx        # Include/exclude filter inputs
-│   │   │   ├── Toolbar.jsx          # File controls and settings
-│   │   │   └── StatusBar.jsx        # Connection status, line count
+│   │   │   ├── ControlBar.jsx       # Include/exclude filter inputs
+│   │   │   ├── DropZone.jsx         # File vs K8s source selector
+│   │   │   ├── K8sConnector.jsx     # K8s connection form with autocomplete
+│   │   │   ├── ResizablePanes.jsx   # Dual-pane layout with resize
+│   │   │   └── SettingsModal.jsx    # Application settings
 │   │   ├── hooks/
-│   │   │   ├── useWebSocket.js      # WebSocket connection hook
-│   │   │   ├── useLogBuffer.js      # Log buffer management
-│   │   │   └── useFilteredLogs.js   # Filtering logic
-│   │   ├── utils/
-│   │   │   └── filters.js           # Regex filtering utilities
+│   │   │   └── useWebSocket.js      # WebSocket connection hook
 │   │   ├── index.html               # HTML entry point
 │   │   └── main.jsx                 # Preact app bootstrap
 │   ├── public/
@@ -271,20 +310,27 @@ WebLogView/
 ## Development Phases
 
 ### Phase 1: Core Functionality (MVP)
-- [ ] Go server with HTTP + WebSocket
-- [ ] File watcher implementation
-- [ ] Basic frontend (no virtual scrolling)
-- [ ] Open single file
-- [ ] Real-time tail functionality
-- [ ] Basic filtering (simple text search)
+- [x] Go server with HTTP + WebSocket
+- [x] File watcher implementation
+- [x] Basic frontend with virtual scrolling
+- [x] Open single file
+- [x] Real-time tail functionality
+- [x] Regex filtering (include/exclude)
+- [x] Tabbed interface
+- [x] Dual-pane layout
+- [x] ANSI color rendering
+- [x] Persistent settings
 
-### Phase 2: Performance & UX
-- [ ] Virtual scrolling implementation
-- [ ] Regex filtering
-- [ ] Syntax highlighting (basic)
-- [ ] Auto-scroll toggle
-- [ ] Line numbers
-- [ ] Copy to clipboard
+### Phase 2: Kubernetes Integration
+- [x] Kubernetes client-go integration
+- [x] Pod log streaming via K8s API
+- [x] Context listing and switching
+- [x] Namespace discovery and validation
+- [x] Pod discovery with autocomplete
+- [x] Container selection for multi-container pods
+- [x] Recent namespaces persistence
+- [x] Smart UI indicators (namespace validation)
+- [x] Side-by-side source selection (File vs K8s)
 
 ### Phase 3: Advanced Features
 - [ ] Large file optimization (streaming)
@@ -293,14 +339,14 @@ WebLogView/
 - [ ] Search/jump to line
 - [ ] Bookmarks/highlights
 - [ ] Export filtered results
+- [ ] Multi-pod log aggregation
 
 ### Phase 4: Polish & Distribution
-- [ ] Dark/light theme
+- [ ] Dark/light theme toggle
 - [ ] Keyboard shortcuts
-- [ ] Configuration UI
 - [ ] Multi-platform builds
 - [ ] Installer/package creation
-- [ ] Documentation
+- [ ] Comprehensive documentation
 
 ## Non-Functional Requirements
 
@@ -343,16 +389,20 @@ WebLogView/
 ## Future Enhancements
 
 ### Possible Features
-- Multi-tab support (multiple files)
+- Multi-pod log aggregation (stream from multiple pods)
+- Log level filtering (parse structured logs)
 - SSH/remote file support
 - Log parsing plugins
 - Alert/notification rules
 - Statistics dashboard
-- Compare two log files
+- Compare two log files/pods
 - Session persistence
 - Saved filter patterns
 - Color coding by log level
-- Timestamp parsing and filtering
+- Timestamp parsing and time-range filtering
+- Label-based pod selection
+- Recent pods history (like recent files/namespaces)
+- Pod status indicators in UI
 
 ### Plugin System (Long-term)
 - Custom log parsers
