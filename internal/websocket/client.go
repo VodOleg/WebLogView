@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -37,18 +38,25 @@ var upgrader = websocket.Upgrader{
 
 // Client represents a WebSocket client connection
 type Client struct {
-	hub     *Hub
-	conn    *websocket.Conn
-	send    chan []byte
-	watcher *watcher.FileWatcher
-	config  *config.Config
+	hub        *Hub
+	conn       *websocket.Conn
+	send       chan []byte
+	watcher    *watcher.FileWatcher
+	k8sWatcher *watcher.K8sWatcher
+	config     *config.Config
 }
 
 // Message represents a WebSocket message
 type Message struct {
-	Type    string   `json:"type"`
-	Path    string   `json:"path,omitempty"`
-	Tail    int      `json:"tail,omitempty"`
+	Type string `json:"type"`
+	// File source fields
+	Path string `json:"path,omitempty"`
+	Tail int    `json:"tail,omitempty"`
+	// K8s source fields
+	Namespace     string `json:"namespace,omitempty"`
+	PodName       string `json:"podName,omitempty"`
+	ContainerName string `json:"containerName,omitempty"`
+	// Common fields
 	Lines   []string `json:"lines,omitempty"`
 	Message string   `json:"message,omitempty"`
 	Error   string   `json:"error,omitempty"`
@@ -81,6 +89,9 @@ func (c *Client) readPump() {
 	defer func() {
 		if c.watcher != nil {
 			c.watcher.Stop()
+		}
+		if c.k8sWatcher != nil {
+			c.k8sWatcher.Stop()
 		}
 		c.hub.unregister <- c
 		c.conn.Close()
@@ -151,6 +162,8 @@ func (c *Client) handleMessage(msg *Message) {
 	switch msg.Type {
 	case "open":
 		c.handleOpenFile(msg)
+	case "open-k8s":
+		c.handleOpenK8s(msg)
 	case "close":
 		c.handleCloseFile()
 	default:
@@ -224,6 +237,71 @@ func (c *Client) handleCloseFile() {
 		c.watcher.Stop()
 		c.watcher = nil
 	}
+	if c.k8sWatcher != nil {
+		c.k8sWatcher.Stop()
+		c.k8sWatcher = nil
+	}
+}
+
+// handleOpenK8s handles Kubernetes pod log requests
+func (c *Client) handleOpenK8s(msg *Message) {
+	// Stop any existing watcher
+	c.handleCloseFile()
+
+	// Validate required fields
+	if msg.Namespace == "" {
+		c.sendError("Namespace is required")
+		return
+	}
+	if msg.PodName == "" {
+		c.sendError("Pod name is required")
+		return
+	}
+
+	// Get tail lines from settings or message
+	tailLines := int64(msg.Tail)
+	if tailLines == 0 {
+		appSettings := settings.GetInstance()
+		tailLines = int64(appSettings.TailLines)
+	}
+
+	// Create K8s watcher
+	k8sWatcher, err := watcher.NewK8sWatcher(watcher.K8sConfig{
+		Namespace:     msg.Namespace,
+		PodName:       msg.PodName,
+		ContainerName: msg.ContainerName,
+		TailLines:     tailLines,
+	})
+
+	if err != nil {
+		c.sendError("Failed to connect to Kubernetes: " + err.Error())
+		return
+	}
+
+	c.k8sWatcher = k8sWatcher
+
+	// Save namespace to recent list
+	appSettings := settings.GetInstance()
+	appSettings.AddRecentNamespace(msg.Namespace)
+
+	// Start watching in background
+	go func() {
+		err := k8sWatcher.Watch(func(lines []string) {
+			c.sendNewLines(lines)
+		})
+		if err != nil {
+			c.sendError("Kubernetes watch error: " + err.Error())
+		}
+	}()
+
+	// Send confirmation
+	confirmMsg := Message{
+		Type:    "initial",
+		Message: fmt.Sprintf("Connected to pod %s/%s", msg.Namespace, msg.PodName),
+		Lines:   []string{},
+	}
+	data, _ := json.Marshal(confirmMsg)
+	c.safeSend(data)
 }
 
 // sendInitialLines sends initial log lines to the client
@@ -233,7 +311,7 @@ func (c *Client) sendInitialLines(lines []string) {
 		Lines: lines,
 	}
 	data, _ := json.Marshal(msg)
-	c.send <- data
+	c.safeSend(data)
 }
 
 // sendNewLines sends new log lines to the client
@@ -243,7 +321,7 @@ func (c *Client) sendNewLines(lines []string) {
 		Lines: lines,
 	}
 	data, _ := json.Marshal(msg)
-	c.send <- data
+	c.safeSend(data)
 }
 
 // sendError sends an error message to the client
@@ -253,5 +331,20 @@ func (c *Client) sendError(errMsg string) {
 		Error: errMsg,
 	}
 	data, _ := json.Marshal(msg)
-	c.send <- data
+	c.safeSend(data)
+}
+
+// safeSend safely sends data to the client, ignoring if channel is closed
+func (c *Client) safeSend(data []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Channel was closed, ignore
+		}
+	}()
+	select {
+	case c.send <- data:
+		// Successfully sent
+	default:
+		// Channel full or closed, drop message
+	}
 }

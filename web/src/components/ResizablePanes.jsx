@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'preact/hooks';
 
 export function ResizablePanes({ topPane, controlBar, bottomPane }) {
-  const [topHeight, setTopHeight] = useState(45); // percentage
+  const [topHeight, setTopHeight] = useState(60); // percentage
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
 

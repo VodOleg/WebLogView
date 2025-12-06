@@ -14,6 +14,7 @@ type Settings struct {
 	RenderAnsiBottomPane bool     `json:"renderAnsiBottomPane"` // Render ANSI codes in bottom pane (default: true - prettified)
 	PollingIntervalMs    int      `json:"pollingIntervalMs"`    // Polling interval in milliseconds (default: 500ms)
 	RecentFiles          []string `json:"recentFiles"`          // Recently opened files (max 10)
+	RecentNamespaces     []string `json:"recentNamespaces"`     // Recently used K8s namespaces (max 10)
 	mu                   sync.RWMutex
 }
 
@@ -26,11 +27,12 @@ var (
 func GetInstance() *Settings {
 	once.Do(func() {
 		instance = &Settings{
-			TailLines:            1000,   // Default
-			RenderAnsiTopPane:    true,   // Prettified by default
-			RenderAnsiBottomPane: true,   // Prettified by default
-			PollingIntervalMs:    500,    // 500ms default
+			TailLines:            1000,       // Default
+			RenderAnsiTopPane:    true,       // Prettified by default
+			RenderAnsiBottomPane: true,       // Prettified by default
+			PollingIntervalMs:    500,        // 500ms default
 			RecentFiles:          []string{}, // Empty list
+			RecentNamespaces:     []string{}, // Empty list
 		}
 		instance.Load()
 	})
@@ -147,17 +149,57 @@ func (s *Settings) AddRecentFile(filePath string) error {
 func (s *Settings) GetRecentFiles() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	// Return a copy to prevent external modification
 	result := make([]string, len(s.RecentFiles))
 	copy(result, s.RecentFiles)
 	return result
 }
 
+// AddRecentNamespace adds a namespace to the recent list
+func (s *Settings) AddRecentNamespace(namespace string) error {
+	if namespace == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Remove if already exists
+	for i, ns := range s.RecentNamespaces {
+		if ns == namespace {
+			s.RecentNamespaces = append(s.RecentNamespaces[:i], s.RecentNamespaces[i+1:]...)
+			break
+		}
+	}
+
+	// Add to front
+	s.RecentNamespaces = append([]string{namespace}, s.RecentNamespaces...)
+
+	// Keep only last 10
+	if len(s.RecentNamespaces) > 10 {
+		s.RecentNamespaces = s.RecentNamespaces[:10]
+	}
+
+	// Save to disk
+	return s.saveUnlocked()
+}
+
+// GetRecentNamespaces returns the list of recent namespaces
+func (s *Settings) GetRecentNamespaces() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Return a copy to prevent external modification
+	result := make([]string, len(s.RecentNamespaces))
+	copy(result, s.RecentNamespaces)
+	return result
+}
+
 // saveUnlocked saves settings without locking (internal use only)
 func (s *Settings) saveUnlocked() error {
 	settingsPath := getSettingsPath()
-	
+
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
 		return err

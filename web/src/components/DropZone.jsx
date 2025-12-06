@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
+import { K8sConnector } from './K8sConnector';
 
-export function DropZone({ isDragging, onFileSelect }) {
+export function DropZone({ isDragging, onFileSelect, onK8sConnect }) {
   const [filePath, setFilePath] = useState('');
   const [recentFiles, setRecentFiles] = useState([]);
   const [showRecent, setShowRecent] = useState(false);
@@ -28,53 +29,74 @@ export function DropZone({ isDragging, onFileSelect }) {
 
   return (
     <div style={styles.container}>
-      <div style={{
-        ...styles.dropZone,
-        ...(isDragging ? styles.dropZoneDragging : {})
-      }}>
-        <div style={styles.icon}>📄</div>
-        <div style={styles.message}>
-          Enter log file path to view
-        </div>
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <input
-            type="text"
-            placeholder="/path/to/your/logfile.log"
-            value={filePath}
-            onInput={(e) => setFilePath(e.target.value)}
-            onFocus={() => setShowRecent(true)}
-            style={styles.input}
-            autoFocus
-          />
-          <button type="submit" style={styles.button}>
-            Open
-          </button>
-        </form>
-        
-        {showRecent && recentFiles.length > 0 && (
-          <div style={styles.recentContainer}>
-            <div style={styles.recentHeader}>Recent Files:</div>
-            {recentFiles.map((file, index) => (
-              <div
-                key={index}
-                style={{
-                  ...styles.recentItem,
-                  ...(hoveredIndex === index ? { backgroundColor: '#3c3c3c' } : {})
-                }}
-                onClick={() => handleRecentFileClick(file)}
-                onMouseEnter={() => setHoveredIndex(index)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                📄 {file}
+      <div style={styles.sideBySide}>
+        {/* File Source */}
+        <div style={styles.sourceCard}>
+          <div style={{
+            ...styles.dropZone,
+            ...(isDragging ? styles.dropZoneDragging : {})
+          }}>
+            <div style={styles.icon}>📄</div>
+            <div style={styles.message}>
+              Open Log File
+            </div>
+            <form onSubmit={handleSubmit} style={styles.form}>
+              <input
+                type="text"
+                placeholder="/path/to/your/logfile.log"
+                value={filePath}
+                onInput={(e) => setFilePath(e.target.value)}
+                onFocus={() => setShowRecent(true)}
+                style={styles.input}
+                autoFocus
+              />
+              <button type="submit" style={styles.button}>
+                Open
+              </button>
+            </form>
+            
+            {showRecent && recentFiles.length > 0 && (
+              <div style={styles.recentContainer}>
+                <div style={styles.recentHeader}>Recent Files:</div>
+                {recentFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      ...styles.recentItem,
+                      ...(hoveredIndex === index ? { backgroundColor: '#3c3c3c' } : {})
+                    }}
+                    onClick={() => handleRecentFileClick(file)}
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  >
+                    📄 {file}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            
+            <div style={styles.hint}>
+              {recentFiles.length > 0 
+                ? 'Enter path or select from recent files above' 
+                : 'Enter the full path to a log file on your system'}
+            </div>
           </div>
-        )}
-        
-        <div style={styles.hint}>
-          {recentFiles.length > 0 
-            ? 'Enter path or select from recent files above' 
-            : 'Enter the full path to a log file on your system'}
+        </div>
+
+        {/* OR Divider */}
+        <div style={styles.divider}>
+          <div style={styles.orText}>OR</div>
+        </div>
+
+        {/* K8s Source */}
+        <div style={styles.sourceCard}>
+          <div style={styles.dropZone}>
+            <div style={styles.icon}>☸️</div>
+            <div style={styles.message}>
+              Connect to Kubernetes
+            </div>
+            <K8sConnector onConnect={onK8sConnect} />
+          </div>
         </div>
       </div>
     </div>
@@ -89,11 +111,41 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1e1e1e',
+    padding: '40px',
+    boxSizing: 'border-box',
+  },
+  sideBySide: {
+    display: 'flex',
+    gap: '40px',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: '1400px',
+  },
+  sourceCard: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  orText: {
+    color: '#858585',
+    fontSize: '14px',
+    fontWeight: '600',
+    backgroundColor: '#1e1e1e',
+    padding: '8px 12px',
+    borderRadius: '20px',
+    border: '2px solid #3c3c3c',
   },
   dropZone: {
-    width: '80%',
-    maxWidth: '800px',
-    padding: '60px 40px',
+    width: '100%',
+    padding: '40px 30px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -102,6 +154,7 @@ const styles = {
     border: '3px dashed #3c3c3c',
     borderRadius: '8px',
     transition: 'all 0.2s ease',
+    minHeight: '400px',
   },
   dropZoneDragging: {
     backgroundColor: '#2d2d30',
@@ -109,19 +162,20 @@ const styles = {
     transform: 'scale(0.98)',
   },
   icon: {
-    fontSize: '64px',
-    marginBottom: '20px',
+    fontSize: '48px',
+    marginBottom: '16px',
     opacity: 0.5,
   },
   message: {
-    fontSize: '24px',
+    fontSize: '20px',
     color: '#cccccc',
     marginBottom: '12px',
     fontWeight: '500',
   },
   hint: {
-    fontSize: '14px',
+    fontSize: '13px',
     color: '#858585',
+    textAlign: 'center',
   },
   form: {
     display: 'flex',
