@@ -98,6 +98,24 @@ export function LogViewerTab({ tabId, onTitleChange }) {
     }
   };
 
+  const handleK8sConnect = (k8sConfig) => {
+    if (connected) {
+      const message = {
+        type: 'open-k8s',
+        namespace: k8sConfig.namespace,
+        podName: k8sConfig.podName,
+        containerName: k8sConfig.containerName,
+        // tail is omitted - backend will use settings value
+      };
+      sendMessage(message);
+      const displayName = `${k8sConfig.namespace}/${k8sConfig.podName}`;
+      setFileName(displayName);
+      onTitleChange(displayName);
+    } else {
+      alert('WebSocket not connected. Please wait...');
+    }
+  };
+
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -194,7 +212,11 @@ export function LogViewerTab({ tabId, onTitleChange }) {
               highlightedLineIndex={highlightedLineIndex}
             />
           ) : (
-            <DropZone isDragging={isDragging} onFileSelect={handleFileDrop} />
+            <DropZone 
+              isDragging={isDragging} 
+              onFileSelect={handleFileDrop}
+              onK8sConnect={handleK8sConnect}
+            />
           )
         }
         controlBar={

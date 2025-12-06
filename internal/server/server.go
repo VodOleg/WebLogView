@@ -40,6 +40,7 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/health", s.handleHealth)
 	http.HandleFunc("/api/settings", s.handleSettings)
 	http.HandleFunc("/api/recent-files", s.handleRecentFiles)
+	http.HandleFunc("/api/recent-namespaces", s.handleRecentNamespaces)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		websocket.HandleWebSocket(s.hub, s.config, w, r)
 	})
@@ -155,6 +156,23 @@ func (s *Server) handleRecentFiles(w http.ResponseWriter, r *http.Request) {
 	recentFiles := appSettings.GetRecentFiles()
 
 	if err := json.NewEncoder(w).Encode(recentFiles); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleRecentNamespaces handles recent namespaces GET requests
+func (s *Server) handleRecentNamespaces(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	appSettings := settings.GetInstance()
+	recentNamespaces := appSettings.GetRecentNamespaces()
+
+	if err := json.NewEncoder(w).Encode(recentNamespaces); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
