@@ -9,6 +9,7 @@ import (
 
 	"github.com/yourusername/weblogview/internal/config"
 	"github.com/yourusername/weblogview/internal/settings"
+	"github.com/yourusername/weblogview/internal/watcher"
 	"github.com/yourusername/weblogview/internal/websocket"
 )
 
@@ -41,6 +42,8 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/settings", s.handleSettings)
 	http.HandleFunc("/api/recent-files", s.handleRecentFiles)
 	http.HandleFunc("/api/recent-namespaces", s.handleRecentNamespaces)
+	http.HandleFunc("/api/k8s/pods", s.handleK8sPods)
+	http.HandleFunc("/api/k8s/containers", s.handleK8sContainers)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		websocket.HandleWebSocket(s.hub, s.config, w, r)
 	})
@@ -173,6 +176,64 @@ func (s *Server) handleRecentNamespaces(w http.ResponseWriter, r *http.Request) 
 	recentNamespaces := appSettings.GetRecentNamespaces()
 
 	if err := json.NewEncoder(w).Encode(recentNamespaces); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleK8sPods handles listing pods in a namespace
+func (s *Server) handleK8sPods(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		http.Error(w, "namespace query parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	pods, err := watcher.ListPodsInNamespace(namespace)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list pods: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(pods); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleK8sContainers handles listing containers in a pod
+func (s *Server) handleK8sContainers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	namespace := r.URL.Query().Get("namespace")
+	podName := r.URL.Query().Get("pod")
+
+	if namespace == "" {
+		http.Error(w, "namespace query parameter is required", http.StatusBadRequest)
+		return
+	}
+	if podName == "" {
+		http.Error(w, "pod query parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	containers, err := watcher.ListContainersInPod(namespace, podName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list containers: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(containers); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
