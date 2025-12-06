@@ -42,6 +42,9 @@ func (s *Server) Start() error {
 	http.HandleFunc("/api/settings", s.handleSettings)
 	http.HandleFunc("/api/recent-files", s.handleRecentFiles)
 	http.HandleFunc("/api/recent-namespaces", s.handleRecentNamespaces)
+	http.HandleFunc("/api/k8s/contexts", s.handleK8sContexts)
+	http.HandleFunc("/api/k8s/switch-context", s.handleK8sSwitchContext)
+	http.HandleFunc("/api/k8s/namespaces", s.handleK8sNamespaces)
 	http.HandleFunc("/api/k8s/pods", s.handleK8sPods)
 	http.HandleFunc("/api/k8s/containers", s.handleK8sContainers)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -176,6 +179,77 @@ func (s *Server) handleRecentNamespaces(w http.ResponseWriter, r *http.Request) 
 	recentNamespaces := appSettings.GetRecentNamespaces()
 
 	if err := json.NewEncoder(w).Encode(recentNamespaces); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleK8sContexts handles listing Kubernetes contexts
+func (s *Server) handleK8sContexts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	contexts, err := watcher.ListContexts()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list contexts: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(contexts); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// handleK8sSwitchContext handles switching Kubernetes context
+func (s *Server) handleK8sSwitchContext(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Context string `json:"context"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Context == "" {
+		http.Error(w, "context is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := watcher.SwitchContext(req.Context); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to switch context: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Write([]byte(`{"status":"ok"}`))
+}
+
+// handleK8sNamespaces handles listing namespaces
+func (s *Server) handleK8sNamespaces(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	namespaces, err := watcher.ListNamespaces()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list namespaces: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(namespaces); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

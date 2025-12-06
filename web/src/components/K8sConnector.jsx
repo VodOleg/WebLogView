@@ -14,8 +14,26 @@ export function K8sConnector({ onConnect }) {
   const [filteredContainers, setFilteredContainers] = useState([]);
   const [namespaceStatus, setNamespaceStatus] = useState(null); // 'valid', 'error', 'checking'
   const [namespaceError, setNamespaceError] = useState('');
+  const [contexts, setContexts] = useState([]);
+  const [currentContext, setCurrentContext] = useState('');
+  const [showContexts, setShowContexts] = useState(false);
+  const [availableNamespaces, setAvailableNamespaces] = useState([]);
+  const [filteredNamespaces, setFilteredNamespaces] = useState([]);
+  const [showNamespaces, setShowNamespaces] = useState(false);
 
   useEffect(() => {
+    // Load contexts
+    fetch('/api/k8s/contexts')
+      .then(res => res.json())
+      .then(ctxs => {
+        setContexts(ctxs || []);
+        const current = ctxs.find(c => c.isCurrent);
+        if (current) {
+          setCurrentContext(current.name);
+        }
+      })
+      .catch(err => console.error('Failed to load contexts:', err));
+
     // Load recent namespaces and pre-populate if available
     fetch('/api/recent-namespaces')
       .then(res => res.json())
@@ -48,11 +66,39 @@ export function K8sConnector({ onConnect }) {
   const handleRecentNamespaceClick = (ns) => {
     setNamespace(ns);
     setShowRecent(false);
+    setShowNamespaces(false);
     fetchPods(ns);
+  };
+
+  const fetchNamespaces = async () => {
+    try {
+      const response = await fetch('/api/k8s/namespaces');
+      if (response.ok) {
+        const namespaces = await response.json();
+        setAvailableNamespaces(namespaces || []);
+        setFilteredNamespaces(namespaces || []);
+      } else {
+        setAvailableNamespaces([]);
+        setFilteredNamespaces([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch namespaces:', err);
+      setAvailableNamespaces([]);
+      setFilteredNamespaces([]);
+    }
   };
 
   const handleNamespaceChange = (value) => {
     setNamespace(value);
+    // Filter namespaces based on input
+    if (value.trim() === '') {
+      setFilteredNamespaces(availableNamespaces);
+    } else {
+      const filtered = availableNamespaces.filter(ns => 
+        ns.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredNamespaces(filtered);
+    }
     // Validate namespace when user changes it
     if (value.trim() !== '') {
       fetchPods(value);
@@ -60,6 +106,19 @@ export function K8sConnector({ onConnect }) {
       setNamespaceStatus(null);
       setNamespaceError('');
     }
+  };
+
+  const handleNamespaceFocus = () => {
+    fetchNamespaces();
+    setShowNamespaces(true);
+    setShowRecent(false);
+  };
+
+  const handleNamespaceClick = (ns) => {
+    setNamespace(ns);
+    setShowNamespaces(false);
+    setShowRecent(false);
+    fetchPods(ns);
   };
 
   const fetchPods = async (ns) => {
@@ -78,8 +137,15 @@ export function K8sConnector({ onConnect }) {
         const pods = await response.json();
         setAvailablePods(pods || []);
         setFilteredPods(pods || []);
-        setNamespaceStatus('valid');
-        setNamespaceError('');
+        
+        // Only show valid status if there are pods, otherwise show warning
+        if (pods && pods.length > 0) {
+          setNamespaceStatus('valid');
+          setNamespaceError('');
+        } else {
+          setNamespaceStatus('warning');
+          setNamespaceError('Namespace is valid but contains no pods');
+        }
       } else {
         setAvailablePods([]);
         setFilteredPods([]);
@@ -164,10 +230,61 @@ export function K8sConnector({ onConnect }) {
     setShowContainers(false);
   };
 
+  const handleContextSwitch = async (contextName) => {
+    setShowContexts(false);
+    try {
+      const response = await fetch('/api/k8s/switch-context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: contextName })
+      });
+      
+      if (response.ok) {
+        setCurrentContext(contextName);
+        // Update contexts to reflect new current
+        setContexts(prev => prev.map(c => ({
+          ...c,
+          isCurrent: c.name === contextName
+        })));
+        // Reset namespace validation when switching contexts
+        setNamespaceStatus(null);
+        setNamespaceError('');
+      } else {
+        alert('Failed to switch context');
+      }
+    } catch (err) {
+      console.error('Failed to switch context:', err);
+      alert('Failed to switch context');
+    }
+  };
+
   return (
     <div className="k8s-connector">
       <h3>Connect to Kubernetes Pod</h3>
       <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label htmlFor="context">Cluster Context:</label>
+          <div className="context-selector" onClick={() => setShowContexts(!showContexts)}>
+            <span className="context-display">☸️ {currentContext || 'default'}</span>
+            <span className="context-arrow">▼</span>
+          </div>
+          {showContexts && contexts.length > 0 && (
+            <div className="contexts-dropdown">
+              {contexts.map((ctx, index) => (
+                <div
+                  key={index}
+                  className={`context-item ${ctx.isCurrent ? 'current' : ''}`}
+                  onClick={() => handleContextSwitch(ctx.name)}
+                >
+                  {ctx.isCurrent && '✓ '}
+                  <strong>{ctx.name}</strong>
+                  <span className="context-meta"> ({ctx.cluster})</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="form-group">
           <label htmlFor="namespace">Namespace:</label>
           <div className="input-with-status">
@@ -176,8 +293,11 @@ export function K8sConnector({ onConnect }) {
               type="text"
               value={namespace}
               onChange={(e) => handleNamespaceChange(e.target.value)}
-              onFocus={() => setShowRecent(true)}
-              onBlur={() => setTimeout(() => setShowRecent(false), 200)}
+              onFocus={handleNamespaceFocus}
+              onBlur={() => setTimeout(() => {
+                setShowRecent(false);
+                setShowNamespaces(false);
+              }, 200)}
               placeholder="default"
             />
             {namespaceStatus === 'checking' && (
@@ -186,8 +306,13 @@ export function K8sConnector({ onConnect }) {
               </span>
             )}
             {namespaceStatus === 'valid' && (
-              <span className="status-icon valid" title="Namespace is valid">
+              <span className="status-icon valid" title="Namespace is valid and has pods">
                 ✓
+              </span>
+            )}
+            {namespaceStatus === 'warning' && (
+              <span className="status-icon warning" title={namespaceError}>
+                ⚠
               </span>
             )}
             {namespaceStatus === 'error' && (
@@ -198,6 +323,7 @@ export function K8sConnector({ onConnect }) {
           </div>
           {showRecent && recentNamespaces.length > 0 && (
             <div className="recent-dropdown">
+              <div className="dropdown-header">Recent Namespaces</div>
               {recentNamespaces.map((ns, index) => (
                 <div
                   key={index}
@@ -205,6 +331,20 @@ export function K8sConnector({ onConnect }) {
                   onClick={() => handleRecentNamespaceClick(ns)}
                 >
                   ☸️ {ns}
+                </div>
+              ))}
+            </div>
+          )}
+          {showNamespaces && filteredNamespaces.length > 0 && (
+            <div className="namespaces-dropdown">
+              <div className="dropdown-header">All Namespaces</div>
+              {filteredNamespaces.map((ns, index) => (
+                <div
+                  key={index}
+                  className="namespace-item"
+                  onClick={() => handleNamespaceClick(ns)}
+                >
+                  📁 {ns}
                 </div>
               ))}
             </div>
@@ -351,15 +491,63 @@ export function K8sConnector({ onConnect }) {
           box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
+        .dropdown-header {
+          padding: 6px 12px;
+          font-size: 11px;
+          font-weight: bold;
+          color: #858585;
+          background: #252526;
+          border-bottom: 1px solid #3c3c3c;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
         .recent-item {
           padding: 8px 12px;
           cursor: pointer;
           color: #d4d4d4;
           font-size: 13px;
           font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+          border-bottom: 1px solid #3c3c3c;
+        }
+
+        .recent-item:last-child {
+          border-bottom: none;
         }
 
         .recent-item:hover {
+          background: #3c3c3c;
+        }
+
+        .namespaces-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: #2d2d30;
+          border: 1px solid #555;
+          border-radius: 4px;
+          margin-top: 4px;
+          max-height: 200px;
+          overflow-y: auto;
+          z-index: 1000;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .namespace-item {
+          padding: 8px 12px;
+          cursor: pointer;
+          color: #d4d4d4;
+          font-size: 13px;
+          font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+          border-bottom: 1px solid #3c3c3c;
+        }
+
+        .namespace-item:last-child {
+          border-bottom: none;
+        }
+
+        .namespace-item:hover {
           background: #3c3c3c;
         }
 
@@ -460,6 +648,12 @@ export function K8sConnector({ onConnect }) {
           font-weight: bold;
         }
 
+        .status-icon.warning {
+          color: #ffa500;
+          font-weight: bold;
+          pointer-events: auto;
+        }
+
         .status-icon.error {
           color: #f48771;
           font-weight: bold;
@@ -469,6 +663,75 @@ export function K8sConnector({ onConnect }) {
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+
+        .context-selector {
+          background: #3c3c3c;
+          border: 1px solid #555;
+          border-radius: 4px;
+          padding: 10px 12px;
+          cursor: pointer;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          transition: all 0.2s;
+        }
+
+        .context-selector:hover {
+          background: #454545;
+          border-color: #007acc;
+        }
+
+        .context-display {
+          color: #d4d4d4;
+          font-size: 14px;
+        }
+
+        .context-arrow {
+          color: #858585;
+          font-size: 10px;
+        }
+
+        .contexts-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: #2d2d30;
+          border: 1px solid #555;
+          border-radius: 4px;
+          margin-top: 4px;
+          max-height: 200px;
+          overflow-y: auto;
+          z-index: 1000;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .context-item {
+          padding: 10px 12px;
+          cursor: pointer;
+          color: #d4d4d4;
+          font-size: 13px;
+          border-bottom: 1px solid #3c3c3c;
+          transition: background 0.15s;
+        }
+
+        .context-item:last-child {
+          border-bottom: none;
+        }
+
+        .context-item:hover {
+          background: #3c3c3c;
+        }
+
+        .context-item.current {
+          background: #2d4a5e;
+          color: #4ec9b0;
+        }
+
+        .context-meta {
+          color: #858585;
+          font-size: 11px;
         }
       `}</style>
     </div>
