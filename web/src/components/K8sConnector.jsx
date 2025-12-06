@@ -445,8 +445,8 @@ export function K8sConnector({ onConnect }) {
           font-size: 13px;
           font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
           box-sizing: border-box;
-          backgroundColor: '#3c3c3c';
-          color: '#d4d4d4';
+          background-color: #3c3c3c;
+          color: #d4d4d4;
         }
 
         input:focus {
@@ -669,7 +669,7 @@ export function K8sConnector({ onConnect }) {
           background: #3c3c3c;
           border: 1px solid #555;
           border-radius: 4px;
-          padding: 10px 12px;
+          padding: 8px 12px;
           cursor: pointer;
           display: flex;
           justify-content: space-between;
@@ -684,7 +684,8 @@ export function K8sConnector({ onConnect }) {
 
         .context-display {
           color: #d4d4d4;
-          font-size: 14px;
+          font-size: 13px;
+          font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
         }
 
         .context-arrow {
