@@ -48,11 +48,15 @@ export function useWebSocket(url) {
     connect();
 
     return () => {
+      console.log('Cleaning up WebSocket connection');
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
+        // Prevent reconnection on intentional cleanup
+        wsRef.current.onclose = null;
         wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, [connect]);

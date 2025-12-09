@@ -63,6 +63,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
 
   const handleWebSocketMessage = (message) => {
     const data = JSON.parse(message.data);
+    console.log('WebSocket message received:', data.type, data);
     
     switch (data.type) {
       case 'lines':
@@ -77,11 +78,9 @@ export function LogViewerTab({ tabId, onTitleChange }) {
       case 'error':
         console.error('WebSocket error:', data.message || data.error);
         const errorMsg = data.message || data.error;
+        console.log('Setting error message:', errorMsg);
         setErrorMessage(errorMsg);
-        // Show alert for critical auth errors
-        if (errorMsg.includes('authentication') || errorMsg.includes('Unauthorized')) {
-          alert('⚠️ Authentication Error\n\n' + errorMsg);
-        }
+        // Don't show alert - the banner is enough and more visible
         break;
       default:
         console.warn('Unknown message type:', data.type);

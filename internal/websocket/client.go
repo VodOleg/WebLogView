@@ -291,6 +291,8 @@ func (c *Client) handleOpenK8s(msg *Message) {
 		})
 		if err != nil {
 			c.sendError("Kubernetes watch error: " + err.Error())
+			// Give time for error message to be sent before connection closes
+			time.Sleep(100 * time.Millisecond)
 		}
 	}()
 
