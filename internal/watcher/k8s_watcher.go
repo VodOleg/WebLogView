@@ -7,7 +7,7 @@ import (
 	"io"
 	"log"
 	"path/filepath"
-	"time"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -75,6 +75,11 @@ func (w *K8sWatcher) Watch(callback func([]string)) error {
 	req := w.clientset.CoreV1().Pods(w.namespace).GetLogs(w.podName, opts)
 	stream, err := req.Stream(w.ctx)
 	if err != nil {
+		// Check for authentication errors
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "Unauthorized") || strings.Contains(errMsg, "authentication") || strings.Contains(errMsg, "forbidden") {
+			return fmt.Errorf("authentication expired or insufficient permissions - please re-authenticate with your cluster: %w", err)
+		}
 		return fmt.Errorf("failed to open log stream: %w", err)
 	}
 	defer stream.Close()
@@ -92,9 +97,14 @@ func (w *K8sWatcher) Watch(callback func([]string)) error {
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err == io.EOF {
-					// Pod might have terminated, wait a bit and check if it restarted
-					time.Sleep(1 * time.Second)
-					continue
+					// Stream ended - could be pod termination or auth expiry
+					log.Printf("K8s stream ended for pod %s/%s", w.namespace, w.podName)
+					return fmt.Errorf("log stream ended - pod may have terminated or authentication expired")
+				}
+				// Check for auth errors in stream errors
+				errMsg := err.Error()
+				if strings.Contains(errMsg, "Unauthorized") || strings.Contains(errMsg, "authentication") || strings.Contains(errMsg, "forbidden") {
+					return fmt.Errorf("authentication expired - please re-authenticate with your cluster: %w", err)
 				}
 				return fmt.Errorf("error reading log stream: %w", err)
 			}

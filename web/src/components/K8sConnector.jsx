@@ -4,8 +4,6 @@ export function K8sConnector({ onConnect }) {
   const [namespace, setNamespace] = useState('default');
   const [podName, setPodName] = useState('');
   const [containerName, setContainerName] = useState('');
-  const [recentNamespaces, setRecentNamespaces] = useState([]);
-  const [showRecent, setShowRecent] = useState(false);
   const [availablePods, setAvailablePods] = useState([]);
   const [showPods, setShowPods] = useState(false);
   const [filteredPods, setFilteredPods] = useState([]);
@@ -20,11 +18,24 @@ export function K8sConnector({ onConnect }) {
   const [availableNamespaces, setAvailableNamespaces] = useState([]);
   const [filteredNamespaces, setFilteredNamespaces] = useState([]);
   const [showNamespaces, setShowNamespaces] = useState(false);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     // Load contexts
     fetch('/api/k8s/contexts')
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const errorText = await res.text();
+          if (res.status === 401 || errorText.includes('authentication') || errorText.includes('Unauthorized')) {
+            setAuthError('Authentication required: Please authenticate with kubectl (e.g., gcloud auth login, aws eks update-kubeconfig, etc.)');
+          } else {
+            setAuthError(`Failed to load Kubernetes contexts: ${errorText}`);
+          }
+          return [];
+        }
+        setAuthError(null);
+        return res.json();
+      })
       .then(ctxs => {
         setContexts(ctxs || []);
         const current = ctxs.find(c => c.isCurrent);
@@ -32,23 +43,18 @@ export function K8sConnector({ onConnect }) {
           setCurrentContext(current.name);
         }
       })
-      .catch(err => console.error('Failed to load contexts:', err));
-
-    // Load recent namespaces and pre-populate if available
-    fetch('/api/recent-namespaces')
-      .then(res => res.json())
-      .then(namespaces => {
-        setRecentNamespaces(namespaces || []);
-        // If there are recent namespaces, use the most recent one
-        if (namespaces && namespaces.length > 0) {
-          const recentNamespace = namespaces[0];
-          setNamespace(recentNamespace);
-          // Pre-populate pods for the recent namespace
-          fetchPods(recentNamespace);
-        }
-      })
-      .catch(err => console.error('Failed to load recent namespaces:', err));
+      .catch(err => {
+        console.error('Failed to load contexts:', err);
+        setAuthError('Failed to connect to Kubernetes: ' + err.message);
+      });
   }, []);
+
+  // Auto-fetch containers when pod name changes
+  useEffect(() => {
+    if (podName && namespace) {
+      fetchContainers(namespace, podName);
+    }
+  }, [podName, namespace]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -63,26 +69,29 @@ export function K8sConnector({ onConnect }) {
     });
   };
 
-  const handleRecentNamespaceClick = (ns) => {
-    setNamespace(ns);
-    setShowRecent(false);
-    setShowNamespaces(false);
-    fetchPods(ns);
-  };
-
   const fetchNamespaces = async () => {
     try {
       const response = await fetch('/api/k8s/namespaces');
       if (response.ok) {
         const namespaces = await response.json();
-        setAvailableNamespaces(namespaces || []);
-        setFilteredNamespaces(namespaces || []);
+        // Reverse the order (descending)
+        const reversedNamespaces = (namespaces || []).reverse();
+        setAvailableNamespaces(reversedNamespaces);
+        setFilteredNamespaces(reversedNamespaces);
+        setAuthError(null);
       } else {
+        const errorText = await response.text();
+        if (response.status === 401 || errorText.includes('authentication') || errorText.includes('Unauthorized')) {
+          setAuthError('Authentication expired: Please re-authenticate with your cluster');
+        } else {
+          setAuthError('Failed to fetch namespaces: ' + errorText);
+        }
         setAvailableNamespaces([]);
         setFilteredNamespaces([]);
       }
     } catch (err) {
       console.error('Failed to fetch namespaces:', err);
+      setAuthError('Failed to connect to Kubernetes: ' + err.message);
       setAvailableNamespaces([]);
       setFilteredNamespaces([]);
     }
@@ -111,13 +120,11 @@ export function K8sConnector({ onConnect }) {
   const handleNamespaceFocus = () => {
     fetchNamespaces();
     setShowNamespaces(true);
-    setShowRecent(false);
   };
 
   const handleNamespaceClick = (ns) => {
     setNamespace(ns);
     setShowNamespaces(false);
-    setShowRecent(false);
     fetchPods(ns);
   };
 
@@ -195,6 +202,10 @@ export function K8sConnector({ onConnect }) {
         const containers = await response.json();
         setAvailableContainers(containers || []);
         setFilteredContainers(containers || []);
+        // Auto-populate container name with the first container if available
+        if (containers && containers.length > 0 && !containerName) {
+          setContainerName(containers[0]);
+        }
       } else {
         setAvailableContainers([]);
         setFilteredContainers([]);
@@ -261,6 +272,37 @@ export function K8sConnector({ onConnect }) {
   return (
     <div className="k8s-connector">
       <h3>Connect to Kubernetes Pod</h3>
+      {authError && (
+        <div style={{
+          backgroundColor: '#fee',
+          border: '1px solid #fcc',
+          borderRadius: '4px',
+          padding: '12px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span style={{ color: '#c00', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '18px' }}>⚠️</span>
+            <span>{authError}</span>
+          </span>
+          <button 
+            type="button"
+            onClick={() => setAuthError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#c00',
+              cursor: 'pointer',
+              fontSize: '18px',
+              padding: '0 4px'
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="context">Cluster Context:</label>
@@ -294,11 +336,9 @@ export function K8sConnector({ onConnect }) {
               value={namespace}
               onChange={(e) => handleNamespaceChange(e.target.value)}
               onFocus={handleNamespaceFocus}
-              onBlur={() => setTimeout(() => {
-                setShowRecent(false);
-                setShowNamespaces(false);
-              }, 200)}
+              onBlur={() => setTimeout(() => setShowNamespaces(false), 200)}
               placeholder="default"
+              autoComplete="off"
             />
             {namespaceStatus === 'checking' && (
               <span className="status-icon checking" title="Checking namespace...">
@@ -321,20 +361,6 @@ export function K8sConnector({ onConnect }) {
               </span>
             )}
           </div>
-          {showRecent && recentNamespaces.length > 0 && (
-            <div className="recent-dropdown">
-              <div className="dropdown-header">Recent Namespaces</div>
-              {recentNamespaces.map((ns, index) => (
-                <div
-                  key={index}
-                  className="recent-item"
-                  onClick={() => handleRecentNamespaceClick(ns)}
-                >
-                  ☸️ {ns}
-                </div>
-              ))}
-            </div>
-          )}
           {showNamespaces && filteredNamespaces.length > 0 && (
             <div className="namespaces-dropdown">
               <div className="dropdown-header">All Namespaces</div>
@@ -361,6 +387,7 @@ export function K8sConnector({ onConnect }) {
             onFocus={handlePodNameFocus}
             onBlur={() => setTimeout(() => setShowPods(false), 200)}
             placeholder="my-app-pod-12345"
+            autoComplete="off"
             required
           />
           {showPods && filteredPods.length > 0 && (
@@ -388,6 +415,7 @@ export function K8sConnector({ onConnect }) {
             onFocus={handleContainerNameFocus}
             onBlur={() => setTimeout(() => setShowContainers(false), 200)}
             placeholder="(optional - first container)"
+            autoComplete="off"
           />
           {showContainers && filteredContainers.length > 0 && (
             <div className="containers-dropdown">

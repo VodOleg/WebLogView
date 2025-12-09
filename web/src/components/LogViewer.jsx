@@ -19,7 +19,7 @@ const ansiConverter = new AnsiToHtml({
   }
 });
 
-export function LogViewer({ lines, autoScroll, title, renderAnsi = false, highlightedLineIndex = null, onLineClick = null }) {
+export function LogViewer({ lines, autoScroll, title, renderAnsi = false, highlightedLineIndex = null, onLineClick = null, onLineDoubleClick = null }) {
   const listRef = useRef(null);
   const containerRef = useRef(null);
   const [height, setHeight] = useState(400);
@@ -70,6 +70,7 @@ export function LogViewer({ lines, autoScroll, title, renderAnsi = false, highli
           ...rowStyle,
           backgroundColor: isHighlighted ? '#3a3d41' : 'transparent'
         }}
+        onDblClick={() => onLineDoubleClick && onLineDoubleClick(index, lineContent)}
       >
         <span 
           style={{

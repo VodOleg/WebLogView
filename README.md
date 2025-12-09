@@ -23,6 +23,20 @@ A cross-platform, web-based log viewer with real-time file monitoring and Kubern
 
 Download the latest release for your platform from the [Releases](../../releases) page.
 
+### First-time Setup (macOS only)
+
+macOS may block the application because it's not signed. To run it:
+
+```bash
+# Make the file executable
+chmod +x weblogview-darwin-arm64
+
+# Remove macOS quarantine attribute (for downloaded files)
+xattr -d com.apple.quarantine weblogview-darwin-arm64
+```
+
+Alternatively, after the first run attempt, go to **System Preferences → Security & Privacy** and click **"Open Anyway"**.
+
 ### Run
 
 ```bash

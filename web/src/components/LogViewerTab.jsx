@@ -4,6 +4,7 @@ import { LogViewer } from './LogViewer';
 import { DropZone } from './DropZone';
 import { ResizablePanes } from './ResizablePanes';
 import { SettingsModal } from './SettingsModal';
+import { LogDetailModal } from './LogDetailModal';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export function LogViewerTab({ tabId, onTitleChange }) {
@@ -18,6 +19,9 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   const [renderAnsiTopPane, setRenderAnsiTopPane] = useState(true);
   const [renderAnsiBottomPane, setRenderAnsiBottomPane] = useState(true);
   const [highlightedLineIndex, setHighlightedLineIndex] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [modalLogLine, setModalLogLine] = useState(null);
+  const [modalLineNumber, setModalLineNumber] = useState(null);
 
   const { sendMessage, lastMessage, connectionStatus } = useWebSocket(
     `ws://${window.location.host}/ws`
@@ -72,7 +76,12 @@ export function LogViewerTab({ tabId, onTitleChange }) {
         break;
       case 'error':
         console.error('WebSocket error:', data.message || data.error);
-        alert('Error: ' + (data.message || data.error));
+        const errorMsg = data.message || data.error;
+        setErrorMessage(errorMsg);
+        // Show alert for critical auth errors
+        if (errorMsg.includes('authentication') || errorMsg.includes('Unauthorized')) {
+          alert('⚠️ Authentication Error\n\n' + errorMsg);
+        }
         break;
       default:
         console.warn('Unknown message type:', data.type);
@@ -191,6 +200,16 @@ export function LogViewerTab({ tabId, onTitleChange }) {
     setAutoScroll(false);
   };
 
+  const handleLineDoubleClick = (index, lineContent) => {
+    setModalLogLine(lineContent);
+    setModalLineNumber(index + 1);
+  };
+
+  const handleCloseModal = () => {
+    setModalLogLine(null);
+    setModalLineNumber(null);
+  };
+
   const hasLog = lines.length > 0;
   const hasFilters = includeFilter || excludeFilter;
 
@@ -201,6 +220,36 @@ export function LogViewerTab({ tabId, onTitleChange }) {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {errorMessage && (
+        <div style={{
+          backgroundColor: '#ff4444',
+          color: 'white',
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '13px',
+          borderBottom: '1px solid #cc0000'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '18px' }}>⚠️</span>
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '18px',
+              padding: '0 8px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <ResizablePanes
         topPane={
           hasLog ? (
@@ -210,6 +259,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
               title="All Lines"
               renderAnsi={renderAnsiTopPane}
               highlightedLineIndex={highlightedLineIndex}
+              onLineDoubleClick={handleLineDoubleClick}
             />
           ) : (
             <DropZone 
@@ -240,6 +290,7 @@ export function LogViewerTab({ tabId, onTitleChange }) {
               title={hasFilters ? "Filtered Lines" : "All Lines"}
               renderAnsi={renderAnsiBottomPane}
               onLineClick={handleLineClick}
+              onLineDoubleClick={handleLineDoubleClick}
             />
           ) : (
             <div style={{ height: '100%', backgroundColor: '#1e1e1e' }} />
@@ -250,6 +301,14 @@ export function LogViewerTab({ tabId, onTitleChange }) {
         isOpen={settingsOpen} 
         onClose={handleSettingsClose} 
       />
+      {modalLogLine && (
+        <LogDetailModal
+          logLine={modalLogLine}
+          lineNumber={modalLineNumber}
+          onClose={handleCloseModal}
+          renderAnsi={renderAnsiBottomPane}
+        />
+      )}
     </div>
   );
 }
