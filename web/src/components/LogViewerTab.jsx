@@ -125,7 +125,6 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
     cleanup: () => {
       // Close WebSocket connection gracefully
       // The useWebSocket cleanup will handle the actual close
-      console.log('LogViewerTab cleanup called for tab', tabId);
     },
     getMergedSourceIds: () => {
       // Return IDs of all merged source tabs
@@ -180,7 +179,6 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
     
     try {
       const data = JSON.parse(message.data);
-      console.log('WebSocket message received:', data.type, data);
     
     // Determine if we should prefix lines (merged mode)
     const shouldPrefix = logSources.length > 0;
@@ -214,7 +212,6 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
       case 'error':
         console.error('WebSocket error:', data.message || data.error);
         const errorMsg = data.message || data.error;
-        console.log('Setting error message:', errorMsg);
         setErrorMessage(errorMsg);
         // Don't show alert - the banner is enough and more visible
         break;

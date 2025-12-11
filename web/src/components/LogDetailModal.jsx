@@ -56,7 +56,6 @@ export function LogDetailModal({ logLine, lineNumber, onClose, renderAnsi = fals
   }, [onClose]);
 
   const formatLogContent = (content) => {
-    console.log('formatLogContent called with:', content.substring(0, 100));
     // Try to format JSON-like structures with better indentation
     let indentLevel = 0;
     let result = '';
@@ -126,7 +125,6 @@ export function LogDetailModal({ logLine, lineNumber, onClose, renderAnsi = fals
       i++;
     }
     
-    console.log('formatLogContent result:', result.substring(0, 200));
     return result;
   };
 
@@ -136,8 +134,6 @@ export function LogDetailModal({ logLine, lineNumber, onClose, renderAnsi = fals
     : formattedContent;
   const formattedContent = formatLogContent(displayContent);
   displayContent = formattedContent;
-  
-  console.log('Modal render - renderAnsi:', renderAnsi, 'formatted length:', displayContent.length);
   
   return (
     <div style={overlayStyle}>
