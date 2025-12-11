@@ -21,6 +21,18 @@ const ansiConverter = new AnsiToHtml({
 export function LogDetailModal({ logLine, lineNumber, onClose, renderAnsi = false }) {
   const modalRef = useRef(null);
 
+  // Parse prefix with color format if present
+  let prefix = null;
+  let prefixColor = null;
+  let actualContent = logLine;
+  
+  const prefixMatch = logLine.match(/^\[([^\]]+)\]\|\|\|([^|]+)\|\|\|(.*)$/);
+  if (prefixMatch) {
+    prefix = prefixMatch[1];
+    prefixColor = prefixMatch[2];
+    actualContent = prefixMatch[3];
+  }
+
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
@@ -119,18 +131,24 @@ export function LogDetailModal({ logLine, lineNumber, onClose, renderAnsi = fals
   };
 
   // Format first, then apply ANSI conversion if needed
+  const formattedContent = formatLogContent(actualContent);
   let displayContent = renderAnsi 
-    ? ansiConverter.toHtml(logLine)
+    ? ansiConverter.toHtml(formattedContent)
     : formattedContent;
-  const formattedContent = formatLogContent(displayContent);
-  displayContent = formattedContent;
   console.log('Modal render - renderAnsi:', renderAnsi, 'formatted length:', displayContent.length);
   
   return (
     <div style={overlayStyle}>
       <div ref={modalRef} style={modalStyle}>
         <div style={headerStyle}>
-          <h3 style={titleStyle}>Log Line {lineNumber}</h3>
+          <h3 style={titleStyle}>
+            Log Line {lineNumber}
+            {prefix && (
+              <span style={{ marginLeft: '12px', color: prefixColor, fontWeight: 'bold' }}>
+                [{prefix}]
+              </span>
+            )}
+          </h3>
           <button onClick={onClose} style={closeButtonStyle}>×</button>
         </div>
         <div style={contentContainerStyle}>

@@ -6,6 +6,7 @@ export function SettingsModal({ isOpen, onClose }) {
   const [renderAnsiTopPane, setRenderAnsiTopPane] = useState(false);
   const [renderAnsiBottomPane, setRenderAnsiBottomPane] = useState(true);
   const [pollingIntervalMs, setPollingIntervalMs] = useState(500);
+  const [sourceNameFormat, setSourceNameFormat] = useState('container');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -24,6 +25,7 @@ export function SettingsModal({ isOpen, onClose }) {
       setRenderAnsiTopPane(data.renderAnsiTopPane);
       setRenderAnsiBottomPane(data.renderAnsiBottomPane);
       setPollingIntervalMs(data.pollingIntervalMs || 500);
+      setSourceNameFormat(data.sourceNameFormat || 'container');
     } catch (err) {
       console.error('Failed to load settings:', err);
       setError(err.message);
@@ -41,7 +43,8 @@ export function SettingsModal({ isOpen, onClose }) {
           tailLines: parseInt(tailLines),
           renderAnsiTopPane,
           renderAnsiBottomPane,
-          pollingIntervalMs: parseInt(pollingIntervalMs)
+          pollingIntervalMs: parseInt(pollingIntervalMs),
+          sourceNameFormat
         })
       });
       if (!response.ok) throw new Error('Failed to save settings');
@@ -102,6 +105,31 @@ export function SettingsModal({ isOpen, onClose }) {
             <div style={styles.helpText}>
               Fallback interval for checking file changes when live events aren't detected. 
               Lower values = faster updates but more CPU usage. Requires restart to apply.
+            </div>
+          </div>
+
+          <div style={styles.section}>
+            <h3 style={styles.sectionTitle}>Merged Logs</h3>
+            <div style={styles.helpText}>
+              Configure how merged log sources are displayed.
+            </div>
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>
+              Source Name Format
+              <select
+                value={sourceNameFormat}
+                onChange={(e) => setSourceNameFormat(e.target.value)}
+                style={styles.input}
+              >
+                <option value="container">Container Name</option>
+                <option value="pod">Pod Name</option>
+                <option value="namespace/pod">Namespace/Pod</option>
+              </select>
+            </label>
+            <div style={styles.helpText}>
+              Choose what identifier to use for merged log sources. Default is Container Name.
             </div>
           </div>
 

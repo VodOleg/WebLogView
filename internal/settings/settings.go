@@ -13,6 +13,7 @@ type Settings struct {
 	RenderAnsiTopPane    bool     `json:"renderAnsiTopPane"`    // Render ANSI codes in top pane (default: true - prettified)
 	RenderAnsiBottomPane bool     `json:"renderAnsiBottomPane"` // Render ANSI codes in bottom pane (default: true - prettified)
 	PollingIntervalMs    int      `json:"pollingIntervalMs"`    // Polling interval in milliseconds (default: 500ms)
+	SourceNameFormat     string   `json:"sourceNameFormat"`     // Format for merged log source names: "container", "pod", or "namespace/pod"
 	RecentFiles          []string `json:"recentFiles"`          // Recently opened files (max 10)
 	RecentNamespaces     []string `json:"recentNamespaces"`     // Recently used K8s namespaces (max 10)
 	mu                   sync.RWMutex
@@ -27,12 +28,13 @@ var (
 func GetInstance() *Settings {
 	once.Do(func() {
 		instance = &Settings{
-			TailLines:            1000,       // Default
-			RenderAnsiTopPane:    true,       // Prettified by default
-			RenderAnsiBottomPane: true,       // Prettified by default
-			PollingIntervalMs:    500,        // 500ms default
-			RecentFiles:          []string{}, // Empty list
-			RecentNamespaces:     []string{}, // Empty list
+			TailLines:            1000,        // Default
+			RenderAnsiTopPane:    true,        // Prettified by default
+			RenderAnsiBottomPane: true,        // Prettified by default
+			PollingIntervalMs:    500,         // 500ms default
+			SourceNameFormat:     "container", // Default to container name
+			RecentFiles:          []string{},  // Empty list
+			RecentNamespaces:     []string{},  // Empty list
 		}
 		instance.Load()
 	})

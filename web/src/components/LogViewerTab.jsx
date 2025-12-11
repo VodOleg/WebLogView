@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect, useMemo, useImperativeHandle, useRef } from 'preact/hooks';
+import { forwardRef } from 'preact/compat';
 import { ControlBar } from './ControlBar';
 import { LogViewer } from './LogViewer';
 import { DropZone } from './DropZone';
@@ -7,8 +8,30 @@ import { SettingsModal } from './SettingsModal';
 import { LogDetailModal } from './LogDetailModal';
 import { useWebSocket } from '../hooks/useWebSocket';
 
-export function LogViewerTab({ tabId, onTitleChange }) {
+// Color palette for different log sources
+const SOURCE_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // green
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // purple
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#84cc16', // lime
+  '#6366f1', // indigo
+];
+
+// Generate color for a source based on its name
+const getSourceColor = (sourceName, sourceIndex) => {
+  return SOURCE_COLORS[sourceIndex % SOURCE_COLORS.length];
+};
+
+export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
   const [lines, setLines] = useState([]);
+  const [logSources, setLogSources] = useState([]); // Array of {id, name, color}
+  const [mergedTabRefs, setMergedTabRefs] = useState([]); // Refs to merged tabs
+  const [currentSourceId, setCurrentSourceId] = useState(null); // Primary source
   const [includeFilter, setIncludeFilter] = useState('');
   const [excludeFilter, setExcludeFilter] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -22,10 +45,97 @@ export function LogViewerTab({ tabId, onTitleChange }) {
   const [errorMessage, setErrorMessage] = useState(null);
   const [modalLogLine, setModalLogLine] = useState(null);
   const [modalLineNumber, setModalLineNumber] = useState(null);
+  const messageCallbacks = useRef([]); // Callbacks for other tabs to receive our messages
+  const sourceColorMapRef = useRef({}); // Map source names to colors for quick lookup
 
   const { sendMessage, lastMessage, connectionStatus } = useWebSocket(
     `ws://${window.location.host}/ws`
   );
+
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    getLogData: () => ({
+      lines,
+      fileName,
+      tabId
+    }),
+    mergeLogsFrom: (sourceData) => {
+      const sourceName = sourceData.fileName || 'Unknown';
+      const sourceTabId = sourceData.tabId;
+      
+      // If this is the first merge, prefix existing lines too
+      if (logSources.length === 0 && fileName) {
+        const currentColor = getSourceColor(fileName, 0);
+        const currentPrefixedLines = lines.map(line => `[${fileName}]|||${currentColor}|||${line}`);
+        
+        // Prefix the incoming source lines too
+        const sourceColor = getSourceColor(sourceName, 1);
+        const sourcePrefixedLines = sourceData.lines.map(line => `[${sourceName}]|||${sourceColor}|||${line}`);
+        
+        setLines([...currentPrefixedLines, ...sourcePrefixedLines]);
+        
+        // Store colors in ref for quick lookup
+        sourceColorMapRef.current[fileName] = currentColor;
+        sourceColorMapRef.current[sourceName] = sourceColor;
+        
+        // Mark that we're now in merged mode - track both sources
+        setLogSources([
+          { id: tabId, name: fileName, color: currentColor }, // Primary source
+          { id: sourceTabId, name: sourceName, color: sourceColor } // Merged source
+        ]);
+      } else {
+        // Prefix the incoming lines with the source color
+        const sourceColor = getSourceColor(sourceName, logSources.length);
+        const prefixedLines = sourceData.lines.map(line => `[${sourceName}]|||${sourceColor}|||${line}`);
+        
+        // Store color in ref
+        sourceColorMapRef.current[sourceName] = sourceColor;
+        
+        // Just append new lines
+        setLines(prev => [...prev, ...prefixedLines]);
+        
+        // Add source if it's new
+        if (!logSources.find(s => s.id === sourceTabId)) {
+          setLogSources(prev => [...prev, { id: sourceTabId, name: sourceName, color: sourceColor }]);
+        }
+      }
+      
+      // Update title only on first merge
+      if (logSources.length === 0) {
+        const totalSources = 2; // Current + merged
+        onTitleChange(`Merged (${totalSources} sources)`);
+      }
+    },
+    addLinesFromSource: (sourceName, newLines) => {
+      // Get color from ref (set during merge)
+      const color = sourceColorMapRef.current[sourceName] || getSourceColor(sourceName, 0);
+      
+      // Add new lines with prefix and color
+      const prefixedLines = newLines.map(line => `[${sourceName}]|||${color}|||${line}`);
+      setLines(prev => [...prev, ...prefixedLines]);
+    },
+    subscribeToMessages: (callback) => {
+      // Allow another tab to subscribe to our messages
+      messageCallbacks.current.push(callback);
+      return () => {
+        messageCallbacks.current = messageCallbacks.current.filter(cb => cb !== callback);
+      };
+    },
+    cleanup: () => {
+      // Close WebSocket connection gracefully
+      // The useWebSocket cleanup will handle the actual close
+      console.log('LogViewerTab cleanup called for tab', tabId);
+    },
+    getMergedSourceIds: () => {
+      // Return IDs of all merged source tabs
+      return logSources.filter(s => s.id !== tabId).map(s => s.id);
+    }
+  }), [lines, fileName, logSources, tabId]);
+
+  const getRandomColor = () => {
+    const colors = ['#007acc', '#4ec9b0', '#ce9178', '#c586c0', '#9cdcfe', '#4fc1ff'];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
 
   useEffect(() => {
     setConnected(connectionStatus === 'connected');
@@ -65,12 +175,31 @@ export function LogViewerTab({ tabId, onTitleChange }) {
     const data = JSON.parse(message.data);
     console.log('WebSocket message received:', data.type, data);
     
+    // Determine if we should prefix lines (merged mode)
+    const shouldPrefix = logSources.length > 0;
+    
+    // Get color for this source from logSources array
+    let color = null;
+    if (shouldPrefix && fileName) {
+      const source = logSources.find(s => s.name === fileName);
+      color = source ? source.color : getSourceColor(fileName, 0);
+    }
+    const prefix = shouldPrefix && fileName ? `[${fileName}]|||${color}|||` : '';
+    
     switch (data.type) {
       case 'lines':
-        setLines(prev => [...prev, ...data.lines]);
+        const newLines = shouldPrefix ? data.lines.map(line => `${prefix}${line}`) : data.lines;
+        setLines(prev => [...prev, ...newLines]);
+        
+        // Notify subscribers (merged tabs) with UNPREFIXED lines
+        // Let the subscriber add its own prefix
+        messageCallbacks.current.forEach(callback => {
+          callback(data.lines); // Send original unprefixed lines
+        });
         break;
       case 'initial':
-        setLines(data.lines || []);
+        const initialLines = shouldPrefix ? (data.lines || []).map(line => `${prefix}${line}`) : (data.lines || []);
+        setLines(initialLines);
         break;
       case 'clear':
         setLines([]);
@@ -106,8 +235,20 @@ export function LogViewerTab({ tabId, onTitleChange }) {
     }
   };
 
-  const handleK8sConnect = (k8sConfig) => {
+  const handleK8sConnect = async (k8sConfig) => {
     if (connected) {
+      // Fetch settings to get sourceNameFormat
+      let sourceNameFormat = 'container'; // default
+      try {
+        const response = await fetch('/api/settings');
+        if (response.ok) {
+          const settings = await response.json();
+          sourceNameFormat = settings.sourceNameFormat || 'container';
+        }
+      } catch (err) {
+        console.warn('Failed to fetch settings, using default sourceNameFormat:', err);
+      }
+
       const message = {
         type: 'open-k8s',
         namespace: k8sConfig.namespace,
@@ -116,7 +257,22 @@ export function LogViewerTab({ tabId, onTitleChange }) {
         // tail is omitted - backend will use settings value
       };
       sendMessage(message);
-      const displayName = `${k8sConfig.namespace}/${k8sConfig.podName}`;
+      
+      // Determine display name based on sourceNameFormat
+      let displayName;
+      switch (sourceNameFormat) {
+        case 'container':
+          displayName = k8sConfig.containerName;
+          break;
+        case 'pod':
+          displayName = k8sConfig.podName;
+          break;
+        case 'namespace/pod':
+        default:
+          displayName = `${k8sConfig.namespace}/${k8sConfig.podName}`;
+          break;
+      }
+      
       setFileName(displayName);
       onTitleChange(displayName);
     } else {
@@ -310,4 +466,4 @@ export function LogViewerTab({ tabId, onTitleChange }) {
       )}
     </div>
   );
-}
+});

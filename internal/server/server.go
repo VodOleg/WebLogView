@@ -96,16 +96,18 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		// Return current settings
 		type SettingsResponse struct {
-			TailLines            int  `json:"tailLines"`
-			RenderAnsiTopPane    bool `json:"renderAnsiTopPane"`
-			RenderAnsiBottomPane bool `json:"renderAnsiBottomPane"`
-			PollingIntervalMs    int  `json:"pollingIntervalMs"`
+			TailLines            int    `json:"tailLines"`
+			RenderAnsiTopPane    bool   `json:"renderAnsiTopPane"`
+			RenderAnsiBottomPane bool   `json:"renderAnsiBottomPane"`
+			PollingIntervalMs    int    `json:"pollingIntervalMs"`
+			SourceNameFormat     string `json:"sourceNameFormat"`
 		}
 		response := SettingsResponse{
 			TailLines:            appSettings.GetTailLines(),
 			RenderAnsiTopPane:    appSettings.GetRenderAnsiTopPane(),
 			RenderAnsiBottomPane: appSettings.GetRenderAnsiBottomPane(),
 			PollingIntervalMs:    appSettings.PollingIntervalMs,
+			SourceNameFormat:     appSettings.SourceNameFormat,
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -114,10 +116,11 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		// Update settings
 		var update struct {
-			TailLines            int   `json:"tailLines"`
-			RenderAnsiTopPane    *bool `json:"renderAnsiTopPane"`
-			RenderAnsiBottomPane *bool `json:"renderAnsiBottomPane"`
-			PollingIntervalMs    int   `json:"pollingIntervalMs"`
+			TailLines            int    `json:"tailLines"`
+			RenderAnsiTopPane    *bool  `json:"renderAnsiTopPane"`
+			RenderAnsiBottomPane *bool  `json:"renderAnsiBottomPane"`
+			PollingIntervalMs    int    `json:"pollingIntervalMs"`
+			SourceNameFormat     string `json:"sourceNameFormat"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -135,6 +138,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if update.PollingIntervalMs > 0 {
 			appSettings.PollingIntervalMs = update.PollingIntervalMs
+		}
+		if update.SourceNameFormat != "" {
+			appSettings.SourceNameFormat = update.SourceNameFormat
 		}
 
 		if err := appSettings.Save(); err != nil {

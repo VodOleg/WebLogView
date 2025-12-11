@@ -60,7 +60,20 @@ export function LogViewer({ lines, autoScroll, title, renderAnsi = false, highli
 
   const Row = ({ index, style }) => {
     const lineContent = lines[index];
-    const displayContent = renderAnsi ? ansiConverter.toHtml(lineContent) : lineContent;
+    
+    // Parse prefix with color format: [sourceName]|||#color|||actual log content
+    let prefix = null;
+    let prefixColor = null;
+    let actualContent = lineContent;
+    
+    const prefixMatch = lineContent.match(/^\[([^\]]+)\]\|\|\|([^|]+)\|\|\|(.*)$/);
+    if (prefixMatch) {
+      prefix = prefixMatch[1];
+      prefixColor = prefixMatch[2];
+      actualContent = prefixMatch[3];
+    }
+    
+    const displayContent = renderAnsi ? ansiConverter.toHtml(actualContent) : actualContent;
     const isHighlighted = highlightedLineIndex === index;
     
     return (
@@ -82,6 +95,15 @@ export function LogViewer({ lines, autoScroll, title, renderAnsi = false, highli
         >
           {index + 1}
         </span>
+        {prefix && (
+          <span style={{ 
+            ...prefixStyle, 
+            color: prefixColor,
+            fontWeight: 'bold'
+          }}>
+            [{prefix}]{' '}
+          </span>
+        )}
         {renderAnsi ? (
           <span 
             style={lineContentStyle} 
@@ -140,6 +162,11 @@ const lineNumberStyle = {
   marginRight: '16px',
   minWidth: '60px',
   textAlign: 'right',
+  userSelect: 'none',
+};
+
+const prefixStyle = {
+  marginRight: '8px',
   userSelect: 'none',
 };
 
