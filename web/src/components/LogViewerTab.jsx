@@ -366,6 +366,7 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
   };
 
   const hasLog = lines.length > 0;
+  const hasConnection = fileName !== ''; // Check if connected to a log source
   const hasFilters = includeFilter || excludeFilter;
 
   return (
@@ -407,7 +408,7 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
       )}
       <ResizablePanes
         topPane={
-          hasLog ? (
+          hasConnection ? (
             <LogViewer
               lines={lines}
               autoScroll={autoScroll}
@@ -435,10 +436,11 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
             filteredLineCount={filteredLines.lines.length}
             totalLines={lines.length}
             onSettingsClick={() => setSettingsOpen(true)}
+            onClearClick={() => setLines([])}
           />
         }
         bottomPane={
-          hasLog ? (
+          hasConnection ? (
             <LogViewer
               lines={filteredLines.lines}
               autoScroll={autoScroll}

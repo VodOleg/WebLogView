@@ -8,6 +8,7 @@ export function ControlBar({
   filteredLineCount,
   totalLines,
   onSettingsClick,
+  onClearClick,
 }) {
   return (
     <div style={styles.controlBar}>
@@ -45,6 +46,18 @@ export function ControlBar({
             </>
           )}
         </div>
+        <button 
+          type="button"
+          style={styles.clearButton}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClearClick();
+          }}
+          title="Clear logs"
+        >
+          🗑️
+        </button>
         <button 
           style={styles.settingsButton}
           onClick={onSettingsClick}
@@ -91,6 +104,18 @@ const styles = {
     fontSize: '13px',
     color: '#888888',
     whiteSpace: 'nowrap',
+  },
+  clearButton: {
+    background: 'none',
+    border: '1px solid #555',
+    borderRadius: '4px',
+    color: '#e0e0e0',
+    cursor: 'pointer',
+    padding: '6px 12px',
+    fontSize: '18px',
+    display: 'flex',
+    alignItems: 'center',
+    transition: 'background-color 0.2s',
   },
   settingsButton: {
     background: 'none',
