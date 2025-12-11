@@ -1,4 +1,4 @@
-.PHONY: build run clean test install dev release
+.PHONY: build run clean test install dev release bump-patch bump-minor bump-major
 
 # Build the application (development)
 build:
@@ -45,6 +45,16 @@ fmt:
 # Run linter
 lint:
 	golangci-lint run
+
+# Version management
+bump-patch:
+	@bash scripts/bump-version.sh patch
+
+bump-minor:
+	@bash scripts/bump-version.sh minor
+
+bump-major:
+	@bash scripts/bump-version.sh major
 
 # Tidy dependencies
 tidy:

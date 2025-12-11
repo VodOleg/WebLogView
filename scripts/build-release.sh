@@ -8,8 +8,12 @@ set -e  # Exit on error
 echo "🚀 Building WebLogView Release..."
 echo ""
 
-# Get version from git tag or use default
-VERSION=${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}
+# Get version from VERSION file or use git tag as fallback
+if [ -f "VERSION" ]; then
+    VERSION="v$(cat VERSION)"
+else
+    VERSION=${VERSION:-$(git describe --tags --always 2>/dev/null || echo "dev")}
+fi
 echo "📌 Version: $VERSION"
 echo ""
 
@@ -63,8 +67,47 @@ done
 echo ""
 echo "✅ All builds completed successfully!"
 echo ""
+
+# Step 3: Create distribution archives
+echo "📦 Creating distribution archives..."
+echo ""
+
+# Create archives directory
+mkdir -p dist/archives
+
+# Package Linux builds (tar.gz preserves permissions)
+for arch in amd64 arm64; do
+    BINARY="weblogview-linux-${arch}"
+    ARCHIVE="dist/archives/${BINARY}-${VERSION}.tar.gz"
+    echo "  📦 Creating ${BINARY}-${VERSION}.tar.gz..."
+    tar -czf "$ARCHIVE" -C dist "$BINARY"
+    echo "     ✓ $ARCHIVE"
+done
+
+# Package macOS builds (tar.gz preserves permissions)
+for arch in amd64 arm64; do
+    BINARY="weblogview-darwin-${arch}"
+    ARCHIVE="dist/archives/${BINARY}-${VERSION}.tar.gz"
+    echo "  📦 Creating ${BINARY}-${VERSION}.tar.gz..."
+    tar -czf "$ARCHIVE" -C dist "$BINARY"
+    echo "     ✓ $ARCHIVE"
+done
+
+# Package Windows builds (zip)
+for arch in amd64; do
+    BINARY="weblogview-windows-${arch}.exe"
+    ARCHIVE="weblogview-windows-${arch}-${VERSION}.zip"
+    echo "  📦 Creating ${ARCHIVE}..."
+    (cd dist && zip -q "../dist/archives/${ARCHIVE}" "$BINARY")
+    echo "     ✓ dist/archives/${ARCHIVE}"
+done
+
+echo ""
 echo "📂 Build artifacts:"
 ls -lh dist/
+echo ""
+echo "📦 Distribution archives:"
+ls -lh dist/archives/
 echo ""
 echo "🎉 Release build complete!"
 echo ""
@@ -72,12 +115,16 @@ echo "To run on this platform:"
 if [[ "$OSTYPE" == "darwin"* ]]; then
     ARCH=$(uname -m)
     if [ "$ARCH" = "arm64" ]; then
-        echo "  ./dist/weblogview-darwin-arm64"
+        echo "  tar -xzf dist/archives/weblogview-darwin-arm64-${VERSION}.tar.gz"
+        echo "  ./weblogview-darwin-arm64"
     else
-        echo "  ./dist/weblogview-darwin-amd64"
+        echo "  tar -xzf dist/archives/weblogview-darwin-amd64-${VERSION}.tar.gz"
+        echo "  ./weblogview-darwin-amd64"
     fi
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    echo "  ./dist/weblogview-linux-amd64"
+    echo "  tar -xzf dist/archives/weblogview-linux-amd64-${VERSION}.tar.gz"
+    echo "  ./weblogview-linux-amd64"
 elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    echo "  .\\dist\\weblogview-windows-amd64.exe"
+    echo "  unzip dist/archives/weblogview-windows-amd64-${VERSION}.zip"
+    echo "  .\\weblogview-windows-amd64.exe"
 fi
