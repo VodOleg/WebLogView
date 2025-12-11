@@ -9,6 +9,9 @@ export function ControlBar({
   totalLines,
   onSettingsClick,
   onClearClick,
+  onReconnectClick,
+  hasConnection,
+  isConnected,
 }) {
   return (
     <div style={styles.controlBar}>
@@ -46,6 +49,23 @@ export function ControlBar({
             </>
           )}
         </div>
+        {hasConnection && (
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onReconnectClick();
+            }}
+            style={{
+              ...styles.reconnectButton,
+              opacity: isConnected ? 0.6 : 1,
+            }}
+            title={isConnected ? "Reconnect" : "Connection lost - Click to reconnect"}
+          >
+            🔄
+          </button>
+        )}
         <button 
           type="button"
           style={styles.clearButton}
@@ -129,5 +149,18 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     whiteSpace: 'nowrap',
+  },
+  reconnectButton: {
+    background: 'none',
+    border: '1px solid #555',
+    borderRadius: '4px',
+    color: '#e0e0e0',
+    cursor: 'pointer',
+    padding: '6px 12px',
+    fontSize: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'opacity 0.2s',
   },
 };

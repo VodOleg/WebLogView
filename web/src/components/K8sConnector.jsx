@@ -49,10 +49,14 @@ export function K8sConnector({ onConnect }) {
       });
   }, []);
 
-  // Auto-fetch containers when pod name changes
+  // Auto-fetch containers when pod name changes (with debounce)
   useEffect(() => {
     if (podName && namespace) {
-      fetchContainers(namespace, podName);
+      // Debounce the fetch to avoid too many requests while typing
+      const timer = setTimeout(() => {
+        fetchContainers(namespace, podName);
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [podName, namespace]);
 
@@ -102,19 +106,15 @@ export function K8sConnector({ onConnect }) {
     // Filter namespaces based on input
     if (value.trim() === '') {
       setFilteredNamespaces(availableNamespaces);
+      setNamespaceStatus(null);
+      setNamespaceError('');
     } else {
       const filtered = availableNamespaces.filter(ns => 
         ns.toLowerCase().includes(value.toLowerCase())
       );
       setFilteredNamespaces(filtered);
     }
-    // Validate namespace when user changes it
-    if (value.trim() !== '') {
-      fetchPods(value);
-    } else {
-      setNamespaceStatus(null);
-      setNamespaceError('');
-    }
+    // Note: Validation is only done on selection or blur, not on every keystroke
   };
 
   const handleNamespaceFocus = () => {

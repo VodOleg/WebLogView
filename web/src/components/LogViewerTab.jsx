@@ -47,6 +47,7 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
   const [modalLineNumber, setModalLineNumber] = useState(null);
   const messageCallbacks = useRef([]); // Callbacks for other tabs to receive our messages
   const sourceColorMapRef = useRef({}); // Map source names to colors for quick lookup
+  const lastConnectionConfig = useRef(null); // Store last connection for reconnect
 
   const { sendMessage, lastMessage, connectionStatus } = useWebSocket(
     `ws://${window.location.host}/ws`
@@ -172,8 +173,14 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
   }, [lastMessage]);
 
   const handleWebSocketMessage = (message) => {
-    const data = JSON.parse(message.data);
-    console.log('WebSocket message received:', data.type, data);
+    if (!message || !message.data) {
+      console.warn('Received invalid WebSocket message:', message);
+      return;
+    }
+    
+    try {
+      const data = JSON.parse(message.data);
+      console.log('WebSocket message received:', data.type, data);
     
     // Determine if we should prefix lines (merged mode)
     const shouldPrefix = logSources.length > 0;
@@ -214,10 +221,16 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
       default:
         console.warn('Unknown message type:', data.type);
     }
+    } catch (error) {
+      console.error('Error handling WebSocket message:', error, 'Raw message:', message);
+    }
   };
 
-  const handleFileDrop = (filePath) => {
+  const handleFileOpen = (filePath) => {
     if (filePath && connected) {
+      // Store connection config for reconnect
+      lastConnectionConfig.current = { type: 'file', config: { path: filePath } };
+      
       // Extract filename from path for tab title
       const fileName = filePath.split('/').pop().split('\\').pop();
       const message = {
@@ -237,6 +250,9 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
 
   const handleK8sConnect = async (k8sConfig) => {
     if (connected) {
+      // Store connection config for reconnect
+      lastConnectionConfig.current = { type: 'k8s', config: k8sConfig };
+      
       // Fetch settings to get sourceNameFormat
       let sourceNameFormat = 'container'; // default
       try {
@@ -300,7 +316,7 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
       // Note: file.path is only available in Electron, not in browsers
       // For now, we'll just use the name and user needs to enter full path
       if (file.path) {
-        handleFileDrop(file.path);
+        handleFileOpen(file.path);
       }
     }
   };
@@ -420,7 +436,7 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
           ) : (
             <DropZone 
               isDragging={isDragging} 
-              onFileSelect={handleFileDrop}
+              onFileSelect={handleFileOpen}
               onK8sConnect={handleK8sConnect}
             />
           )
@@ -436,7 +452,32 @@ export const LogViewerTab = forwardRef(({ tabId, onTitleChange }, ref) => {
             filteredLineCount={filteredLines.lines.length}
             totalLines={lines.length}
             onSettingsClick={() => setSettingsOpen(true)}
-            onClearClick={() => setLines([])}
+            onClearClick={() => {
+              setLines([]);
+              setHighlightedLineIndex(null);
+              // Help garbage collection by clearing the ref
+              if (Object.keys(sourceColorMapRef.current).length > 0) {
+                sourceColorMapRef.current = {};
+              }
+            }}
+            onReconnectClick={() => {
+              if (lastConnectionConfig.current) {
+                // First, send close message to cleanup backend
+                sendMessage({ type: 'close' });
+                
+                // Wait a bit for cleanup, then reconnect
+                setTimeout(() => {
+                  const { type, config } = lastConnectionConfig.current;
+                  if (type === 'k8s') {
+                    handleK8sConnect(config);
+                  } else if (type === 'file') {
+                    handleFileOpen(config.path);
+                  }
+                }, 100);
+              }
+            }}
+            hasConnection={fileName !== ''}
+            isConnected={connected}
           />
         }
         bottomPane={

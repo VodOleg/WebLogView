@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -286,24 +285,22 @@ func (c *Client) handleOpenK8s(msg *Message) {
 
 	// Start watching in background
 	go func() {
-		err := k8sWatcher.Watch(func(lines []string) {
-			c.sendNewLines(lines)
-		})
+		err := k8sWatcher.Watch(
+			func(lines []string) {
+				// Streaming callback for new lines
+				c.sendNewLines(lines)
+			},
+			func(lines []string) {
+				// Initial callback for bulk historical lines
+				c.sendInitialLines(lines)
+			},
+		)
 		if err != nil {
 			c.sendError("Kubernetes watch error: " + err.Error())
 			// Give time for error message to be sent before connection closes
 			time.Sleep(100 * time.Millisecond)
 		}
 	}()
-
-	// Send confirmation
-	confirmMsg := Message{
-		Type:    "initial",
-		Message: fmt.Sprintf("Connected to pod %s/%s", msg.Namespace, msg.PodName),
-		Lines:   []string{},
-	}
-	data, _ := json.Marshal(confirmMsg)
-	c.safeSend(data)
 }
 
 // sendInitialLines sends initial log lines to the client

@@ -131,10 +131,12 @@ export function LogDetailModal({ logLine, lineNumber, onClose, renderAnsi = fals
   };
 
   // Format first, then apply ANSI conversion if needed
-  const formattedContent = formatLogContent(actualContent);
-  let displayContent = renderAnsi 
-    ? ansiConverter.toHtml(formattedContent)
+ let displayContent = renderAnsi 
+    ? ansiConverter.toHtml(logLine)
     : formattedContent;
+  const formattedContent = formatLogContent(displayContent);
+  displayContent = formattedContent;
+  
   console.log('Modal render - renderAnsi:', renderAnsi, 'formatted length:', displayContent.length);
   
   return (
