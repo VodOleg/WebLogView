@@ -285,16 +285,9 @@ func (c *Client) handleOpenK8s(msg *Message) {
 
 	// Start watching in background
 	go func() {
-		err := k8sWatcher.Watch(
-			func(lines []string) {
-				// Streaming callback for new lines
-				c.sendNewLines(lines)
-			},
-			func(lines []string) {
-				// Initial callback for bulk historical lines
-				c.sendInitialLines(lines)
-			},
-		)
+		err := k8sWatcher.Watch(func(lines []string) {
+			c.sendNewLines(lines)
+		})
 		if err != nil {
 			c.sendError("Kubernetes watch error: " + err.Error())
 			// Give time for error message to be sent before connection closes

@@ -8,7 +8,6 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -58,7 +57,7 @@ func NewK8sWatcher(cfg K8sConfig) (*K8sWatcher, error) {
 }
 
 // Watch streams logs from the Kubernetes pod
-func (w *K8sWatcher) Watch(callback func([]string), initialCallback func([]string)) error {
+func (w *K8sWatcher) Watch(callback func([]string)) error {
 	defer w.cancel()
 
 	opts := &corev1.PodLogOptions{
@@ -87,12 +86,6 @@ func (w *K8sWatcher) Watch(callback func([]string), initialCallback func([]strin
 
 	log.Printf("Started watching pod %s/%s", w.namespace, w.podName)
 
-	// Buffer for initial lines
-	initialLines := make([]string, 0, int(w.tailLines))
-	isInitialLoad := true
-	initialLoadStartTime := time.Now()
-	initialLoadTimeout := 1000 * time.Millisecond
-
 	// Read logs line by line
 	reader := bufio.NewReader(stream)
 	for {
@@ -101,22 +94,8 @@ func (w *K8sWatcher) Watch(callback func([]string), initialCallback func([]strin
 			log.Println("K8s watcher stopped")
 			return nil
 		default:
-			// Check if we should end initial load due to timeout
-			if isInitialLoad && time.Since(initialLoadStartTime) > initialLoadTimeout {
-				if len(initialLines) > 0 {
-					initialCallback(initialLines)
-					log.Printf("Sent initial %d lines for pod %s/%s (timeout), switching to streaming mode", len(initialLines), w.namespace, w.podName)
-				}
-				isInitialLoad = false
-			}
-
 			line, err := reader.ReadString('\n')
 			if err != nil {
-				// If we hit EOF or error during initial load, send what we have
-				if isInitialLoad && len(initialLines) > 0 {
-					initialCallback(initialLines)
-				}
-
 				if err == io.EOF {
 					// Stream ended - could be pod termination or auth expiry
 					log.Printf("K8s stream ended for pod %s/%s", w.namespace, w.podName)
@@ -135,18 +114,7 @@ func (w *K8sWatcher) Watch(callback func([]string), initialCallback func([]strin
 				if line[len(line)-1] == '\n' {
 					line = line[:len(line)-1]
 				}
-
-				if isInitialLoad {
-					initialLines = append(initialLines, line)
-					// Switch to streaming mode when we've collected expected number of lines
-					if len(initialLines) >= int(w.tailLines) {
-						initialCallback(initialLines)
-						isInitialLoad = false
-						log.Printf("Sent initial %d lines for pod %s/%s, switching to streaming mode", len(initialLines), w.namespace, w.podName)
-					}
-				} else {
-					callback([]string{line})
-				}
+				callback([]string{line})
 			}
 		}
 	}
